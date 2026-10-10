@@ -1,0 +1,18 @@
+{
+  "name": "bizimki",
+  "version": "1.0.0",
+  "description": "Arkadaşlar için özel web sohbet uygulaması",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
