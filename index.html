@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E5A4B">
+<title>Bizimki</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  :root {
+    --paper: #EDF0F5;
+    --ink: #14202B;
+    --muted: #6B7885;
+    --mine: #0E5A4B;
+    --mine-ink: #F4FBF8;
+    --theirs: #FFFFFF;
+    --accent: #F2B705;
+    --danger: #B3261E;
+    --line: #D8DEE6;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Giriş ekranı ---------- */
+  #auth {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  #auth h1 {
+    font-size: 3.25rem;
+    line-height: 1;
+    margin: 0 0 8px;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    color: var(--mine);
+  }
+  #auth .tagline { margin: 0 0 28px; color: var(--muted); }
+  .tabs { display: flex; gap: 4px; background: #DDE3EA; padding: 4px; border-radius: 12px; margin-bottom: 20px; }
+  .tabs button {
+    flex: 1; border: 0; background: transparent; padding: 10px; border-radius: 9px;
+    font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(20,32,43,.15); }
+  .field { display: block; margin-bottom: 14px; }
+  .field span { display: block; font-size: .875rem; font-weight: 600; margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 10px;
+    background: #fff; font-size: 1rem;
+  }
+  .field input:focus { border-color: var(--mine); outline: none; box-shadow: 0 0 0 3px rgba(14,90,75,.2); }
+  .primary {
+    width: 100%; margin-top: 6px; padding: 14px; border: 0; border-radius: 10px;
+    background: var(--mine); color: var(--mine-ink); font-weight: 700; cursor: pointer;
+  }
+  .primary:disabled { opacity: .6; }
+  .form-error { color: var(--danger); min-height: 1.4em; margin: 10px 0 0; font-size: .9375rem; }
+
+  /* ---------- Sohbet ekranı ---------- */
+  #chat { height: 100dvh; display: flex; flex-direction: column; max-width: 680px; margin: 0 auto; background: var(--paper); }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    background: var(--mine); color: var(--mine-ink);
+  }
+  header .title { flex: 1; min-width: 0; }
+  header h2 { margin: 0; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; }
+  #presence { font-size: .8125rem; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header button {
+    border: 0; background: rgba(255,255,255,.14); color: inherit; padding: 8px 12px;
+    border-radius: 999px; font-size: .875rem; font-weight: 600; cursor: pointer;
+  }
+  #banner { background: var(--accent); color: var(--ink); text-align: center; font-size: .875rem; font-weight: 600; padding: 6px; }
+
+  #messages {
+    flex: 1; overflow-y: auto; padding: 12px 12px 4px;
+    display: flex; flex-direction: column;
+    overscroll-behavior: contain;
+  }
+  .empty { margin: auto; text-align: center; color: var(--muted); padding: 0 24px; }
+  .day { align-self: center; margin: 14px 0 8px; font-size: .8125rem; color: var(--muted); font-weight: 600; }
+  .row { display: flex; flex-direction: column; max-width: 82%; margin-top: 10px; }
+  .row.grouped { margin-top: 2px; }
+  .row.mine { align-self: flex-end; align-items: flex-end; }
+  .row.theirs { align-self: flex-start; align-items: flex-start; }
+  .name { font-size: .8125rem; font-weight: 700; margin: 0 10px 3px; }
+  .bubble { padding: 8px 12px 6px; border-radius: 18px; overflow-wrap: anywhere; box-shadow: 0 1px 1px rgba(20,32,43,.08); }
+  .mine .bubble { background: var(--mine); color: var(--mine-ink); border-bottom-right-radius: 5px; }
+  .theirs .bubble { background: var(--theirs); border-bottom-left-radius: 5px; }
+  .row.grouped.mine .bubble { border-top-right-radius: 5px; }
+  .row.grouped.theirs .bubble { border-top-left-radius: 5px; }
+  .text { white-space: pre-wrap; }
+  .time { display: block; text-align: right; font-size: .6875rem; opacity: .65; margin-top: 2px; }
+
+  #newPill {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 84px;
+    border: 0; background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 999px;
+    font-weight: 600; font-size: .875rem; box-shadow: 0 2px 8px rgba(20,32,43,.3); cursor: pointer;
+  }
+  #typing { min-height: 22px; padding: 2px 16px 0; font-size: .8125rem; color: var(--muted); }
+
+  form#composer {
+    display: flex; align-items: flex-end; gap: 8px;
+    padding: 6px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+  #input {
+    flex: 1; resize: none; max-height: 140px; padding: 11px 14px;
+    border: 1.5px solid var(--line); border-radius: 22px; background: #fff; line-height: 1.35;
+  }
+  #input:focus { border-color: var(--mine); outline: none; }
+  #send {
+    flex: none; width: 46px; height: 46px; border: 0; border-radius: 50%;
+    background: var(--accent); color: var(--ink); display: grid; place-items: center; cursor: pointer;
+  }
+  #send:active { transform: scale(.94); }
+  #send svg { width: 22px; height: 22px; }
+
+  #toast {
+    position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top)); transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .9375rem;
+    max-width: calc(100% - 32px); z-index: 10;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<main id="auth" hidden>
+  <h1>Bizimki</h1>
+  <p class="tagline">Sadece arkadaşların için özel sohbet odası.</p>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabLogin" aria-selected="true">Giriş yap</button>
+    <button type="button" role="tab" id="tabRegister" aria-selected="false">Kayıt ol</button>
+  </div>
+  <form id="authForm" autocomplete="on">
+    <label class="field"><span>Kullanıcı adı</span>
+      <input id="username" name="username" autocomplete="username" autocapitalize="none" required minlength="3" maxlength="20">
+    </label>
+    <label class="field"><span>Şifre</span>
+      <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
+    </label>
+    <label class="field" id="inviteField" hidden><span>Davet kodu</span>
+      <input id="invite" name="invite" autocomplete="off" autocapitalize="none">
+    </label>
+    <button class="primary" id="authSubmit" type="submit">Giriş yap</button>
+    <p class="form-error" id="authError" role="alert"></p>
+  </form>
+</main>
+
+<div id="chat" hidden style="position:relative">
+  <header>
+    <div class="title">
+      <h2>Bizimki</h2>
+      <div id="presence"></div>
+    </div>
+    <button type="button" id="bell" hidden>Bildirimleri aç</button>
+    <button type="button" id="logout">Çıkış yap</button>
+  </header>
+  <div id="banner" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
+  <div id="messages" aria-live="polite"></div>
+  <button type="button" id="newPill" hidden>Yeni mesajlar</button>
+  <div id="typing" aria-live="polite"></div>
+  <form id="composer">
+    <textarea id="input" rows="1" maxlength="2000" placeholder="Mesaj yaz" aria-label="Mesaj"></textarea>
+    <button id="send" type="submit" aria-label="Gönder">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12 2-12 2z"/></svg>
+    </button>
+  </form>
+</div>
+
+<div id="toast" role="status" hidden></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const NAME_COLORS = ['#B4322F', '#1F6FB2', '#8A4FB3', '#B26A00', '#2C7A3F', '#C0407A', '#456B7A'];
+
+  let token = localStorage.getItem('token');
+  let me = JSON.parse(localStorage.getItem('me') || 'null');
+  let socket = null;
+  let lastMsg = null;
+  let lastId = 0;
+  let mode = 'login';
+  let hasConnectedOnce = false;
+  const typingTimers = new Map();
+
+  // ---------- Yardımcılar ----------
+  async function api(path, { method = 'GET', body } = {}) {
+    const res = await fetch(path, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || 'Bir şeyler ters gitti. Tekrar dene.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  let toastTimer;
+  function toast(text) {
+    const el = $('#toast');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (el.hidden = true), 3500);
+  }
+
+  function colorFor(name) {
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return NAME_COLORS[h % NAME_COLORS.length];
+  }
+
+  const dayKey = (t) => new Date(t).toDateString();
+  function dayLabel(t) {
+    const d = new Date(t);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Bugün';
+    if (d.toDateString() === yesterday.toDateString()) return 'Dün';
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  }
+  const timeLabel = (t) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+  // ---------- Giriş / kayıt ----------
+  function setMode(next) {
+    mode = next;
+    const reg = mode === 'register';
+    $('#tabLogin').setAttribute('aria-selected', String(!reg));
+    $('#tabRegister').setAttribute('aria-selected', String(reg));
+    $('#inviteField').hidden = !reg;
+    $('#invite').required = reg;
+    $('#password').autocomplete = reg ? 'new-password' : 'current-password';
+    $('#authSubmit').textContent = reg ? 'Kayıt ol' : 'Giriş yap';
+    $('#authError').textContent = '';
+  }
+  $('#tabLogin').onclick = () => setMode('login');
+  $('#tabRegister').onclick = () => setMode('register');
+
+  $('#authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#authSubmit');
+    btn.disabled = true;
+    $('#authError').textContent = '';
+    try {
+      const body = { username: $('#username').value, password: $('#password').value };
+      if (mode === 'register') body.invite = $('#invite').value;
+      const data = await api(mode === 'register' ? '/api/register' : '/api/login', { method: 'POST', body });
+      token = data.token;
+      me = data.user;
+      localStorage.setItem('token', token);
+      localStorage.setItem('me', JSON.stringify(me));
+      $('#password').value = '';
+      startChat();
+    } catch (err) {
+      $('#authError').textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function showAuth() {
+    $('#chat').hidden = true;
+    $('#auth').hidden = false;
+  }
+
+  async function logout() {
+    try { await api('/api/logout', { method: 'POST' }); } catch (_) {}
+    token = null;
+    me = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('me');
+    if (socket) { socket.disconnect(); socket = null; }
+    hasConnectedOnce = false;
+    showAuth();
+  }
+  $('#logout').onclick = logout;
+
+  // ---------- Mesaj listesi ----------
+  const list = $('#messages');
+  const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const scrollToBottom = () => { list.scrollTop = list.scrollHeight; $('#newPill').hidden = true; };
+  list.addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; });
+  $('#newPill').onclick = scrollToBottom;
+
+  function appendMessage(m) {
+    if (m.id <= lastId) return;
+    const empty = list.querySelector('.empty');
+    if (empty) empty.remove();
+
+    const sameDay = lastMsg && dayKey(lastMsg.createdAt) === dayKey(m.createdAt);
+    if (!sameDay) {
+      const d = document.createElement('div');
+      d.className = 'day';
+      d.textContent = dayLabel(m.createdAt);
+      list.appendChild(d);
+    }
+    const mine = me && m.userId === me.id;
+    const grouped = sameDay && lastMsg.userId === m.userId && m.createdAt - lastMsg.createdAt < 5 * 60 * 1000;
+
+    const row = document.createElement('div');
+    row.className = 'row ' + (mine ? 'mine' : 'theirs') + (grouped ? ' grouped' : '');
+
+    if (!mine && !grouped) {
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = m.username;
+      name.style.color = colorFor(m.username);
+      row.appendChild(name);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.textContent = m.body;
+    const time = document.createElement('span');
+    time.className = 'time';
+    time.textContent = timeLabel(m.createdAt);
+    bubble.append(text, time);
+    row.appendChild(bubble);
+    list.appendChild(row);
+
+    lastMsg = m;
+    lastId = m.id;
+  }
+
+  function showEmptyState() {
+    if (list.children.length) return;
+    const el = document.createElement('div');
+    el.className = 'empty';
+    el.textContent = 'Henüz mesaj yok. İlk mesajı sen yaz.';
+    list.appendChild(el);
+  }
+
+  async function loadHistory() {
+    const { messages } = await api('/api/history');
+    list.textContent = '';
+    lastMsg = null;
+    lastId = 0;
+    messages.forEach(appendMessage);
+    showEmptyState();
+    scrollToBottom();
+  }
+
+  async function loadMissed() {
+    const { messages } = await api('/api/history?after=' + lastId);
+    const stick = nearBottom();
+    messages.forEach(appendMessage);
+    if (stick) scrollToBottom();
+  }
+
+  // ---------- Bildirimler ----------
+  function updateBell() {
+    $('#bell').hidden = !('Notification' in window) || Notification.permission !== 'default';
+  }
+  $('#bell').onclick = async () => {
+    await Notification.requestPermission();
+    updateBell();
+  };
+  async function notify(m) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const opts = { body: m.body, tag: 'bizimki', icon: '/icon-192.png' };
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(m.username, opts);
+    } catch (_) {
+      try { new Notification(m.username, opts); } catch (__) {}
+    }
+  }
+
+  // ---------- Socket ----------
+  function connectSocket() {
+    if (socket) socket.disconnect();
+    socket = io({ auth: { token } });
+
+    socket.on('connect', async () => {
+      $('#banner').hidden = true;
+      if (hasConnectedOnce) {
+        try { await loadMissed(); } catch (_) {}
+      }
+      hasConnectedOnce = true;
+    });
+    socket.on('disconnect', () => { $('#banner').hidden = false; });
+    socket.on('connect_error', (err) => {
+      if (err && err.message === 'auth') {
+        toast('Oturumun süresi doldu. Tekrar giriş yap.');
+        logout();
+      } else {
+        $('#banner').hidden = false;
+      }
+    });
+
+    socket.on('message', (m) => {
+      const stick = nearBottom() || (me && m.userId === me.id);
+      appendMessage(m);
+      if (stick) scrollToBottom();
+      else $('#newPill').hidden = false;
+      if (document.hidden && !(me && m.userId === me.id)) notify(m);
+      const t = typingTimers.get(m.username);
+      if (t) { clearTimeout(t); typingTimers.delete(m.username); renderTyping(); }
+    });
+
+    socket.on('presence', (names) => {
+      const n = names.length;
+      $('#presence').textContent = n + ' kişi çevrimiçi: ' + names.join(', ');
+    });
+
+    socket.on('typing', (name) => {
+      clearTimeout(typingTimers.get(name));
+      typingTimers.set(name, setTimeout(() => { typingTimers.delete(name); renderTyping(); }, 3000));
+      renderTyping();
+    });
+  }
+
+  function renderTyping() {
+    const names = [...typingTimers.keys()];
+    $('#typing').textContent = names.length ? names.join(', ') + ' yazıyor…' : '';
+  }
+
+  // ---------- Mesaj gönderme ----------
+  const input = $('#input');
+  const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
+  let lastTypingEmit = 0;
+  input.addEventListener('input', () => {
+    autosize();
+    const now = Date.now();
+    if (socket && now - lastTypingEmit > 2000) { lastTypingEmit = now; socket.emit('typing'); }
+  });
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isTouch) { e.preventDefault(); $('#composer').requestSubmit(); }
+  });
+  $('#send').addEventListener('pointerdown', (e) => e.preventDefault()); // klavyeyi kapatma
+
+  $('#composer').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    if (!socket || !socket.connected) { toast('Bağlantı yok. Bağlanınca tekrar dene.'); return; }
+    socket.emit('message', text, (res) => {
+      if (res && res.error) toast(res.error);
+    });
+    input.value = '';
+    autosize();
+    input.focus();
+  });
+
+  // ---------- Başlangıç ----------
+  async function startChat() {
+    $('#auth').hidden = true;
+    $('#chat').hidden = false;
+    updateBell();
+    try {
+      await loadHistory();
+    } catch (err) {
+      if (err.status === 401) { logout(); return; }
+      toast('Mesajlar yüklenemedi. Sayfayı yenile.');
+    }
+    connectSocket();
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (token && me) startChat(); else showAuth();
+})();
+</script>
+</body>
+</html>
