@@ -110,7 +110,7 @@ app.use((req, res, next) => {
   next();
 });
 // Sadece bu dosyalar dışarıya açılır (server.js ve veritabanı asla servis edilmez).
-const PUBLIC_FILES = ['index.html', 'sw.js'];
+const PUBLIC_FILES = ['index.html', 'sw.js', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 for (const file of PUBLIC_FILES) {
   app.get('/' + file, (req, res) => res.sendFile(path.join(__dirname, file)));
