@@ -13,6 +13,9 @@ const INVITE_CODE = process.env.INVITE_CODE || 'arkadaslar';
 const SESSION_DAYS = 36500; // pratikte süresiz oturum
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_VOICE = 6; // sesli odada aynı anda en fazla kişi
+// Başkan hesabı: bu kullanıcı adı "/bot mesaj" ile botun adından yazabilir.
+// Render'da ADMIN_USERNAME ortam değişkeniyle değiştirilebilir.
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'Ömer_Rıza_Bolukbas').toLocaleLowerCase('tr-TR');
 
 if (!process.env.INVITE_CODE) {
   console.warn(
@@ -96,6 +99,15 @@ function userForToken(token) {
   if (typeof token !== 'string' || token.length !== 64) return null;
   const minTime = Date.now() - SESSION_DAYS * 24 * 60 * 60 * 1000;
   return q.userByToken.get(token, minTime) || null;
+}
+
+// ---------- Bot kullanıcısı ----------
+const BOT_NAME = 'Bizimki-Bot';
+let bot = q.userByName.get(BOT_NAME);
+if (!bot) {
+  // Geçerli bir bcrypt özeti olmayan rastgele değer: bu hesaba kimse giriş yapamaz.
+  const info = q.insertUser.run(BOT_NAME, 'x:' + crypto.randomBytes(24).toString('hex'), Date.now());
+  bot = { id: Number(info.lastInsertRowid), username: BOT_NAME };
 }
 
 // ---------- Basit deneme sınırlayıcı (giriş/kayıt) ----------
@@ -232,6 +244,177 @@ function leaveVoice(socket) {
   broadcastVoice();
 }
 
+// ---------- Bot komutları ----------
+function botSay(text) {
+  const now = Date.now();
+  const info = q.insertMessage.run(bot.id, text.slice(0, MAX_MESSAGE_LENGTH), now);
+  io.emit('message', {
+    id: Number(info.lastInsertRowid),
+    userId: bot.id,
+    username: bot.username,
+    body: text.slice(0, MAX_MESSAGE_LENGTH),
+    createdAt: now,
+  });
+}
+
+// Komut adlarını Türkçe karakterlerden bağımsız karşılaştırmak için sadeleştirir.
+const norm = (s) =>
+  String(s)
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g');
+
+const WMO = {
+  0: 'Açık',
+  1: 'Çoğunlukla açık',
+  2: 'Parçalı bulutlu',
+  3: 'Kapalı',
+  45: 'Sisli',
+  48: 'Kırağılı sis',
+  51: 'Hafif çisenti',
+  53: 'Çisenti',
+  55: 'Yoğun çisenti',
+  56: 'Dondurucu çisenti',
+  57: 'Yoğun dondurucu çisenti',
+  61: 'Hafif yağmurlu',
+  63: 'Yağmurlu',
+  65: 'Şiddetli yağmurlu',
+  66: 'Dondurucu yağmur',
+  67: 'Şiddetli dondurucu yağmur',
+  71: 'Hafif karlı',
+  73: 'Karlı',
+  75: 'Yoğun karlı',
+  77: 'Kar taneleri',
+  80: 'Hafif sağanak',
+  81: 'Sağanak',
+  82: 'Şiddetli sağanak',
+  85: 'Hafif kar sağanağı',
+  86: 'Yoğun kar sağanağı',
+  95: 'Gök gürültülü fırtına',
+  96: 'Dolulu fırtına',
+  99: 'Şiddetli dolulu fırtına',
+};
+
+const weatherCache = new Map(); // şehir -> { t, text }
+async function getWeather(city) {
+  const key = norm(city);
+  const hit = weatherCache.get(key);
+  if (hit && hit.t > Date.now() - 10 * 60 * 1000) return hit.text;
+
+  const geoRes = await fetch(
+    'https://geocoding-api.open-meteo.com/v1/search?count=1&language=tr&format=json&name=' +
+      encodeURIComponent(city),
+    { signal: AbortSignal.timeout(6000) }
+  );
+  const geo = await geoRes.json();
+  const place = geo && geo.results && geo.results[0];
+  if (!place) return `"${city}" adında bir yer bulamadım. Şehir adını kontrol et.`;
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}` +
+    '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m' +
+    '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+    '&forecast_days=1&timezone=auto';
+  const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+  const w = await res.json();
+  const cur = w && w.current;
+  if (!cur) throw new Error('no weather');
+
+  const round = (n) => Math.round(n);
+  const daily = w.daily || {};
+  const min = daily.temperature_2m_min && daily.temperature_2m_min[0];
+  const max = daily.temperature_2m_max && daily.temperature_2m_max[0];
+  const rain = daily.precipitation_probability_max && daily.precipitation_probability_max[0];
+  const where = [place.name, place.admin1 && place.admin1 !== place.name ? place.admin1 : null, place.country]
+    .filter(Boolean)
+    .join(', ');
+
+  let text = `${where}\n${WMO[cur.weather_code] || 'Hava durumu bilinmiyor'}, ${round(cur.temperature_2m)}°C`;
+  text += ` (hissedilen ${round(cur.apparent_temperature)}°C)`;
+  text += `\nNem %${round(cur.relative_humidity_2m)}, rüzgar ${round(cur.wind_speed_10m)} km/sa`;
+  if (typeof min === 'number' && typeof max === 'number') {
+    text += `\nBugün en düşük ${round(min)}°C, en yüksek ${round(max)}°C`;
+  }
+  if (typeof rain === 'number') text += `, yağış ihtimali %${round(rain)}`;
+
+  weatherCache.set(key, { t: Date.now(), text });
+  return text;
+}
+
+const JOKES = [
+  'Bilgisayar neden doktora gitmiş? Virüs kapmış.',
+  'Matematik kitabı neden üzgünmüş? Çünkü çok problemi varmış.',
+  'Telefon neden hiç yalan söylemez? Çünkü her şeyi kayda alıyor.',
+  'Ağaç neden internete giremiyormuş? Çünkü hep dalgın olduğu için şifreyi unutuyormuş.',
+  'Saat neden mutluymuş? Çünkü hep zamanında geliyormuş.',
+];
+
+const HELP =
+  'Komutlar:\n' +
+  '/hava [şehir] - hava durumu (şehir yazmazsan İstanbul)\n' +
+  '/zar [yüz sayısı] - zar at\n' +
+  '/yazıtura - yazı tura at\n' +
+  '/seç a, b, c - birini seçerim\n' +
+  '/saat - saat kaç\n' +
+  '/şaka - bir şaka\n' +
+  '/yardım - bu liste';
+
+async function handleCommand(body) {
+  const [rawCmd, ...rest] = body.split(/\s+/);
+  const cmd = norm(rawCmd.slice(1));
+  const arg = rest.join(' ').trim();
+
+  switch (cmd) {
+    case 'yardim':
+    case 'help':
+      return botSay(HELP);
+    case 'hava': {
+      const city = (arg || 'İstanbul').slice(0, 60);
+      try {
+        return botSay(await getWeather(city));
+      } catch (_) {
+        return botSay('Hava durumunu şu an alamadım, biraz sonra tekrar dene.');
+      }
+    }
+    case 'zar': {
+      let sides = parseInt(arg, 10);
+      if (!Number.isInteger(sides) || sides < 2) sides = 6;
+      if (sides > 1000) sides = 1000;
+      return botSay(`${sides} yüzlü zar: ${crypto.randomInt(1, sides + 1)}`);
+    }
+    case 'yazitura':
+      return botSay(crypto.randomInt(0, 2) === 0 ? 'Yazı!' : 'Tura!');
+    case 'sec': {
+      const options = arg
+        .split(/,|\sveya\s/i)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+      if (options.length < 2) return botSay('Örnek: /seç pizza, hamburger, kebap');
+      return botSay('Ben şunu seçtim: ' + options[crypto.randomInt(0, options.length)]);
+    }
+    case 'saat':
+      return botSay(
+        'Saat ' +
+          new Date().toLocaleString('tr-TR', {
+            timeZone: 'Europe/Istanbul',
+            day: 'numeric',
+            month: 'long',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+      );
+    case 'saka':
+      return botSay(JOKES[crypto.randomInt(0, JOKES.length)]);
+    default:
+      return botSay('Bu komutu bilmiyorum. Komutları görmek için /yardım yaz.');
+  }
+}
+
 io.use((socket, next) => {
   const user = userForToken(socket.handshake.auth && socket.handshake.auth.token);
   if (!user) return next(new Error('auth'));
@@ -241,6 +424,7 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const { id, username } = socket.user;
+  const isAdmin = username.toLocaleLowerCase('tr-TR') === ADMIN_USERNAME;
   const entry = online.get(id) || { username, count: 0 };
   entry.count += 1;
   online.set(id, entry);
@@ -262,6 +446,14 @@ io.on('connection', (socket) => {
     if (recent.length >= 8) return reply({ error: 'Çok hızlı yazıyorsun, biraz bekle.' });
     recent.push(now);
 
+    // Başkan, "/bot mesaj" yazarak botun hesabından mesaj gönderebilir.
+    if (isAdmin && /^\/bot(\s|$)/i.test(body)) {
+      const botText = body.slice(4).trim();
+      if (!botText) return reply({ error: 'Örnek: /bot Herkese merhaba' });
+      botSay(botText);
+      return reply({ ok: true });
+    }
+
     const info = q.insertMessage.run(id, body, now);
     io.emit('message', {
       id: Number(info.lastInsertRowid),
@@ -271,6 +463,10 @@ io.on('connection', (socket) => {
       createdAt: now,
     });
     reply({ ok: true });
+
+    if (body.startsWith('/') && body.length > 1) {
+      handleCommand(body).catch(() => {});
+    }
   });
 
   socket.on('typing', () => {
