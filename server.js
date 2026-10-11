@@ -10,14 +10,28 @@ const bcrypt = require('bcryptjs');
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const INVITE_CODE = process.env.INVITE_CODE || 'arkadaslar';
-const SESSION_DAYS = 90;
+const SESSION_DAYS = 36500; // pratikte süresiz oturum
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_VOICE = 6; // sesli odada aynı anda en fazla kişi
 
 if (!process.env.INVITE_CODE) {
   console.warn(
     'UYARI: INVITE_CODE ayarlanmadı, varsayılan davet kodu "arkadaslar" kullanılıyor. ' +
       'Yayına almadan önce kendi davet kodunu belirle.'
   );
+}
+
+// Sesli görüşme için ICE sunucuları. Varsayılan: Google STUN.
+// Bağlantı kurulamayan ağlar için ICE_SERVERS ortam değişkenine TURN sunucusu ekleyebilirsin (JSON dizisi).
+let ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+if (process.env.ICE_SERVERS) {
+  try {
+    const parsed = JSON.parse(process.env.ICE_SERVERS);
+    if (Array.isArray(parsed) && parsed.length) ICE_SERVERS = parsed;
+    else console.warn('UYARI: ICE_SERVERS boş veya dizi değil, varsayılan STUN kullanılıyor.');
+  } catch (_) {
+    console.warn('UYARI: ICE_SERVERS geçerli JSON değil, varsayılan STUN kullanılıyor.');
+  }
 }
 
 // ---------- Veritabanı ----------
@@ -176,6 +190,10 @@ app.get('/api/me', auth, (req, res) => {
   res.json({ user: req.user });
 });
 
+app.get('/api/ice', auth, (req, res) => {
+  res.json({ iceServers: ICE_SERVERS });
+});
+
 app.get('/api/history', auth, (req, res) => {
   const before = parseInt(req.query.before, 10);
   const after = parseInt(req.query.after, 10);
@@ -198,6 +216,22 @@ function broadcastPresence() {
   );
 }
 
+// Sesli oda: socket.id -> { username }
+const voice = new Map();
+function voiceNames() {
+  return [...voice.values()].map((v) => v.username);
+}
+function broadcastVoice() {
+  io.emit('voice:members', voiceNames());
+}
+function leaveVoice(socket) {
+  if (!voice.has(socket.id)) return;
+  voice.delete(socket.id);
+  socket.leave('voice');
+  socket.to('voice').emit('voice:peer-left', socket.id);
+  broadcastVoice();
+}
+
 io.use((socket, next) => {
   const user = userForToken(socket.handshake.auth && socket.handshake.auth.token);
   if (!user) return next(new Error('auth'));
@@ -211,6 +245,7 @@ io.on('connection', (socket) => {
   entry.count += 1;
   online.set(id, entry);
   broadcastPresence();
+  socket.emit('voice:members', voiceNames());
 
   const recent = [];
 
@@ -242,7 +277,33 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('typing', username);
   });
 
+  // ---- Sesli görüşme (WebRTC sinyalleşmesi) ----
+  socket.on('voice:join', (ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const already = voice.has(socket.id);
+    if (!already && voice.size >= MAX_VOICE) {
+      return reply({ error: `Sesli oda dolu (en fazla ${MAX_VOICE} kişi).` });
+    }
+    const peers = [...voice.entries()]
+      .filter(([sid]) => sid !== socket.id)
+      .map(([sid, v]) => ({ id: sid, username: v.username }));
+    if (!already) {
+      voice.set(socket.id, { username });
+      socket.join('voice');
+      broadcastVoice();
+    }
+    reply({ ok: true, peers });
+  });
+
+  socket.on('voice:signal', (msg) => {
+    if (!voice.has(socket.id) || !msg || typeof msg.to !== 'string' || !voice.has(msg.to)) return;
+    io.to(msg.to).emit('voice:signal', { from: socket.id, username, data: msg.data });
+  });
+
+  socket.on('voice:leave', () => leaveVoice(socket));
+
   socket.on('disconnect', () => {
+    leaveVoice(socket);
     const e = online.get(id);
     if (e) {
       e.count -= 1;
@@ -255,4 +316,3 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
   console.log(`Bizimki http://localhost:${PORT} adresinde çalışıyor`);
 });
-  

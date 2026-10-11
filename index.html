@@ -89,6 +89,22 @@
   }
   #banner { background: var(--accent); color: var(--ink); text-align: center; font-size: .875rem; font-weight: 600; padding: 6px; }
 
+  /* ---------- Sesli oda çubuğu ---------- */
+  #voice {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; background: #DDE9E5; font-size: .875rem;
+    border-bottom: 1px solid var(--line);
+  }
+  #voice.live { background: #BFE3D6; }
+  #voiceInfo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #voice button {
+    flex: none; border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 700; cursor: pointer;
+    background: var(--mine); color: var(--mine-ink);
+  }
+  #voice button.leave { background: var(--danger); color: #fff; }
+  #voice button.ghost { background: #fff; color: var(--ink); border: 1.5px solid var(--line); }
+  #voice button:disabled { opacity: .6; }
+
   #messages {
     flex: 1; overflow-y: auto; padding: 12px 12px 4px;
     display: flex; flex-direction: column;
@@ -175,6 +191,12 @@
     <button type="button" id="logout">Çıkış yap</button>
   </header>
   <div id="banner" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
+  <div id="voice">
+    <span id="voiceInfo">Sesli oda boş</span>
+    <button type="button" id="voiceMute" class="ghost" hidden>Sustur</button>
+    <button type="button" id="voiceToggle">Başlat</button>
+  </div>
+  <div id="voiceAudio" hidden></div>
   <div id="messages" aria-live="polite"></div>
   <button type="button" id="newPill" hidden>Yeni mesajlar</button>
   <div id="typing" aria-live="polite"></div>
@@ -292,6 +314,7 @@
   }
 
   async function logout() {
+    cleanupVoice(true);
     try { await api('/api/logout', { method: 'POST' }); } catch (_) {}
     token = null;
     me = null;
@@ -395,6 +418,195 @@
     }
   }
 
+  // ---------- Sesli oda (WebRTC) ----------
+  let iceServers = null;
+  let localStream = null;
+  let inVoice = false;
+  let joining = false;
+  let muted = false;
+  let voiceNames = [];
+  let wakeLock = null;
+  const peers = new Map(); // socket id -> { pc, audio, username, pending }
+
+  async function getIce() {
+    if (iceServers) return iceServers;
+    try {
+      const data = await api('/api/ice');
+      iceServers = data.iceServers;
+    } catch (_) {
+      iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+    }
+    return iceServers;
+  }
+
+  function updateVoiceUI() {
+    const info = $('#voiceInfo');
+    const toggle = $('#voiceToggle');
+    const mute = $('#voiceMute');
+    $('#voice').classList.toggle('live', inVoice);
+    if (inVoice) info.textContent = 'Sesli odadasın: ' + voiceNames.join(', ');
+    else if (voiceNames.length) info.textContent = 'Sesli odada: ' + voiceNames.join(', ');
+    else info.textContent = 'Sesli oda boş';
+    toggle.textContent = inVoice ? 'Ayrıl' : voiceNames.length ? 'Katıl' : 'Başlat';
+    toggle.className = inVoice ? 'leave' : '';
+    toggle.disabled = joining;
+    mute.hidden = !inVoice;
+    mute.textContent = muted ? 'Mikrofonu aç' : 'Sustur';
+  }
+
+  function closePeer(id) {
+    const p = peers.get(id);
+    if (!p) return;
+    peers.delete(id);
+    try { p.pc.close(); } catch (_) {}
+    if (p.audio) { p.audio.srcObject = null; p.audio.remove(); }
+  }
+
+  function createPeer(id, username) {
+    const pc = new RTCPeerConnection({ iceServers });
+    const entry = { pc, audio: null, username, pending: [] };
+    peers.set(id, entry);
+    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    pc.onicecandidate = (e) => {
+      if (e.candidate && socket) socket.emit('voice:signal', { to: id, data: { candidate: e.candidate } });
+    };
+    pc.ontrack = (e) => {
+      if (!entry.audio) {
+        const a = document.createElement('audio');
+        a.autoplay = true;
+        a.setAttribute('playsinline', '');
+        $('#voiceAudio').appendChild(a);
+        entry.audio = a;
+      }
+      entry.audio.srcObject = e.streams[0];
+      entry.audio.play().catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' && peers.get(id) === entry) {
+        toast(username + ' ile ses bağlantısı kurulamadı.');
+      }
+    };
+    return entry;
+  }
+
+  async function flushPending(entry) {
+    const queued = entry.pending.splice(0);
+    for (const c of queued) {
+      try { await entry.pc.addIceCandidate(c); } catch (_) {}
+    }
+  }
+
+  function stopLocal() {
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+      localStream = null;
+    }
+    if (wakeLock) {
+      try { wakeLock.release(); } catch (_) {}
+      wakeLock = null;
+    }
+  }
+
+  function cleanupVoice(tellServer) {
+    if (tellServer && socket && inVoice) socket.emit('voice:leave');
+    for (const id of [...peers.keys()]) closePeer(id);
+    stopLocal();
+    inVoice = false;
+    joining = false;
+    muted = false;
+    updateVoiceUI();
+  }
+
+  async function joinVoice() {
+    if (inVoice || joining) return;
+    if (!socket || !socket.connected) { toast('Bağlantı yok. Bağlanınca tekrar dene.'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) {
+      toast('Bu tarayıcı sesli görüşmeyi desteklemiyor.');
+      return;
+    }
+    joining = true;
+    updateVoiceUI();
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (_) {
+      joining = false;
+      updateVoiceUI();
+      toast('Mikrofon izni verilmedi. Tarayıcı ayarlarından izin ver.');
+      return;
+    }
+    await getIce();
+    socket.emit('voice:join', async (res) => {
+      if (!res || res.error) {
+        stopLocal();
+        joining = false;
+        updateVoiceUI();
+        toast((res && res.error) || 'Sesli odaya girilemedi.');
+        return;
+      }
+      inVoice = true;
+      joining = false;
+      muted = false;
+      updateVoiceUI();
+      try {
+        if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (_) {}
+      for (const p of res.peers) {
+        try {
+          const entry = createPeer(p.id, p.username);
+          const offer = await entry.pc.createOffer();
+          await entry.pc.setLocalDescription(offer);
+          socket.emit('voice:signal', { to: p.id, data: { sdp: entry.pc.localDescription } });
+        } catch (_) {}
+      }
+    });
+  }
+
+  function leaveVoice() {
+    cleanupVoice(true);
+  }
+
+  $('#voiceToggle').onclick = () => (inVoice ? leaveVoice() : joinVoice());
+  $('#voiceMute').onclick = () => {
+    muted = !muted;
+    if (localStream) localStream.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    updateVoiceUI();
+  };
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden && inVoice && navigator.wakeLock && !wakeLock) {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+    }
+  });
+
+  async function onVoiceSignal({ from, username, data }) {
+    if (!inVoice || !data) return;
+    try {
+      let entry = peers.get(from);
+      if (data.sdp) {
+        if (data.sdp.type === 'offer') {
+          if (entry) closePeer(from);
+          entry = createPeer(from, username);
+          await entry.pc.setRemoteDescription(data.sdp);
+          await flushPending(entry);
+          const answer = await entry.pc.createAnswer();
+          await entry.pc.setLocalDescription(answer);
+          socket.emit('voice:signal', { to: from, data: { sdp: entry.pc.localDescription } });
+        } else if (entry) {
+          await entry.pc.setRemoteDescription(data.sdp);
+          await flushPending(entry);
+        }
+      } else if (data.candidate && entry) {
+        if (entry.pc.remoteDescription) {
+          try { await entry.pc.addIceCandidate(data.candidate); } catch (_) {}
+        } else {
+          entry.pending.push(data.candidate);
+        }
+      }
+    } catch (_) {}
+  }
+
   // ---------- Socket ----------
   function connectSocket() {
     if (socket) socket.disconnect();
@@ -407,7 +619,13 @@
       }
       hasConnectedOnce = true;
     });
-    socket.on('disconnect', () => { $('#banner').hidden = false; });
+    socket.on('disconnect', () => {
+      $('#banner').hidden = false;
+      if (inVoice || joining) {
+        cleanupVoice(false);
+        toast('Bağlantı koptu, sesli odadan çıkarıldın.');
+      }
+    });
     socket.on('connect_error', (err) => {
       if (err && err.message === 'auth') {
         toast('Oturumun süresi doldu. Tekrar giriş yap.');
@@ -437,6 +655,13 @@
       typingTimers.set(name, setTimeout(() => { typingTimers.delete(name); renderTyping(); }, 3000));
       renderTyping();
     });
+
+    socket.on('voice:members', (names) => {
+      voiceNames = names;
+      updateVoiceUI();
+    });
+    socket.on('voice:signal', onVoiceSignal);
+    socket.on('voice:peer-left', (id) => closePeer(id));
   }
 
   function renderTyping() {
@@ -477,6 +702,7 @@
     $('#auth').hidden = true;
     $('#chat').hidden = false;
     updateBell();
+    updateVoiceUI();
     try {
       await loadHistory();
     } catch (err) {
