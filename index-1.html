@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E5A4B">
+<title>Bizimki</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  :root {
+    --paper: #EDF0F5;
+    --ink: #14202B;
+    --muted: #6B7885;
+    --mine: #0E5A4B;
+    --mine-ink: #F4FBF8;
+    --theirs: #FFFFFF;
+    --accent: #F2B705;
+    --danger: #B3261E;
+    --line: #D8DEE6;
+    --soft: #E3EBE8;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Giriş ekranı ---------- */
+  #auth {
+    min-height: 100dvh; display: flex; flex-direction: column; justify-content: center;
+    padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto;
+  }
+  #auth h1 { font-size: 3.25rem; line-height: 1; margin: 0 0 8px; letter-spacing: -0.03em; font-weight: 800; color: var(--mine); }
+  #auth .tagline { margin: 0 0 28px; color: var(--muted); }
+  .tabs { display: flex; gap: 4px; background: #DDE3EA; padding: 4px; border-radius: 12px; margin-bottom: 20px; }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 10px; border-radius: 9px; font-weight: 600; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(20,32,43,.15); }
+  .field { display: block; margin-bottom: 14px; }
+  .field span { display: block; font-size: .875rem; font-weight: 600; margin-bottom: 6px; }
+  .field input { width: 100%; padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; font-size: 1rem; }
+  .field input:focus { border-color: var(--mine); outline: none; box-shadow: 0 0 0 3px rgba(14,90,75,.2); }
+  .primary { width: 100%; margin-top: 6px; padding: 14px; border: 0; border-radius: 10px; background: var(--mine); color: var(--mine-ink); font-weight: 700; }
+  .primary:disabled { opacity: .6; }
+  .form-error { color: var(--danger); min-height: 1.4em; margin: 10px 0 0; font-size: .9375rem; }
+
+  /* ---------- Uygulama iskeleti ---------- */
+  #app { height: 100dvh; display: flex; flex-direction: column; max-width: 680px; margin: 0 auto; background: var(--paper); position: relative; }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  header.top {
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px; background: var(--mine); color: var(--mine-ink);
+  }
+  header.top .title { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; color: inherit; }
+  header.top h2 { margin: 0; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header.top .sub { font-size: .8125rem; opacity: .88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.1em; }
+  .ibtn {
+    flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.14);
+    color: inherit; font-size: 1.15rem; display: grid; place-items: center;
+  }
+  #banner { background: var(--accent); color: var(--ink); text-align: center; font-size: .875rem; font-weight: 600; padding: 6px; }
+  .tag { font-weight: 500; opacity: .75; margin-left: 4px; font-size: .88em; }
+
+  /* ---------- Sohbet listesi ---------- */
+  #convList { flex: 1; overflow-y: auto; background: #fff; overscroll-behavior: contain; }
+  .conv { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .conv:active { background: #F2F5F8; }
+  .avatar { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 1.1rem; }
+  .avatar .dot { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border-radius: 50%; background: #2EB85C; border: 2px solid #fff; }
+  .conv-main { flex: 1; min-width: 0; }
+  .conv-top, .conv-bottom { display: flex; align-items: center; gap: 8px; }
+  .conv-name { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-time { flex: none; font-size: .75rem; color: var(--muted); }
+  .conv-prev { flex: 1; min-width: 0; font-size: .9rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-prev.typing { color: var(--mine); font-weight: 600; }
+  .badge { flex: none; background: var(--accent); color: var(--ink); border-radius: 999px; min-width: 22px; height: 22px; padding: 0 6px; font-size: .75rem; font-weight: 800; display: grid; place-items: center; }
+  .list-empty { padding: 40px 24px; text-align: center; color: var(--muted); }
+
+  /* ---------- Sesli oda çubuğu ---------- */
+  #voice { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #DDE9E5; font-size: .875rem; border-bottom: 1px solid var(--line); }
+  #voice.live { background: #BFE3D6; }
+  #voiceInfo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #voice button { flex: none; border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 700; background: var(--mine); color: var(--mine-ink); }
+  #voice button.leave { background: var(--danger); color: #fff; }
+  #voice button.ghost { background: #fff; color: var(--ink); border: 1.5px solid var(--line); }
+  #voice button:disabled { opacity: .6; }
+
+  /* ---------- Sabit mesaj çubuğu ---------- */
+  #pinBar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #fff; border-bottom: 1px solid var(--line); font-size: .875rem; cursor: pointer; }
+  #pinBar .pin-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pinBar .pin-count { flex: none; color: var(--muted); font-size: .75rem; }
+
+  /* ---------- Mesajlar ---------- */
+  #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 4px; display: flex; flex-direction: column; overscroll-behavior: contain; }
+  .empty { margin: auto; text-align: center; color: var(--muted); padding: 0 24px; }
+  .day { align-self: center; margin: 14px 0 8px; font-size: .8125rem; color: var(--muted); font-weight: 600; }
+  .sys { align-self: center; max-width: 88%; margin: 8px 0; padding: 4px 12px; border-radius: 999px; background: rgba(20,32,43,.08); color: var(--muted); font-size: .8125rem; text-align: center; }
+  .row { display: flex; flex-direction: column; max-width: 82%; margin-top: 10px; -webkit-touch-callout: none; }
+  .row.grouped { margin-top: 2px; }
+  .row.mine { align-self: flex-end; align-items: flex-end; }
+  .row.theirs { align-self: flex-start; align-items: flex-start; }
+  .row.hl .bubble { animation: hl 1.4s ease; }
+  @keyframes hl { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 1px 1px rgba(20,32,43,.08); } }
+  .name { font-size: .8125rem; font-weight: 700; margin: 0 10px 3px; }
+  .bubble { padding: 8px 12px 6px; border-radius: 18px; overflow-wrap: anywhere; box-shadow: 0 1px 1px rgba(20,32,43,.08); user-select: none; -webkit-user-select: none; }
+  .mine .bubble { background: var(--mine); color: var(--mine-ink); border-bottom-right-radius: 5px; }
+  .theirs .bubble { background: var(--theirs); border-bottom-left-radius: 5px; }
+  .row.grouped.mine .bubble { border-top-right-radius: 5px; }
+  .row.grouped.theirs .bubble { border-top-left-radius: 5px; }
+  .bubble.styled, .mine .bubble.styled, .theirs .bubble.styled { background: #14202B; color: #fff; }
+  .bubble.deleted { opacity: .75; font-style: italic; }
+  .text { white-space: pre-wrap; }
+  .meta { display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: .6875rem; opacity: .7; margin-top: 2px; }
+  .tick { letter-spacing: -2px; }
+  .tick.read { color: #5BC8FF; opacity: 1; }
+  .quote { margin: 0 0 6px; padding: 4px 8px; border-left: 3px solid var(--accent); border-radius: 6px; background: rgba(20,32,43,.08); font-size: .8125rem; cursor: pointer; max-width: 260px; }
+  .mine .quote { background: rgba(255,255,255,.14); }
+  .quote b { display: block; font-size: .75rem; }
+  .quote span { display: block; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pic { display: block; width: auto; height: auto; max-width: min(260px, 62vw); max-height: 320px; min-width: 120px; min-height: 120px; border-radius: 12px; background: #DDE3EA; object-fit: cover; cursor: zoom-in; }
+  .pic.ok { min-width: 0; min-height: 0; }
+  .filecard { display: flex; align-items: center; gap: 10px; min-width: 190px; padding: 6px 2px; cursor: pointer; }
+  .filecard .ficon { flex: none; width: 38px; height: 38px; border-radius: 10px; background: rgba(20,32,43,.1); display: grid; place-items: center; font-size: 1.2rem; }
+  .filecard .fname { font-weight: 600; overflow-wrap: anywhere; }
+  .filecard .fsize { font-size: .75rem; opacity: .7; }
+  .reacts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .chip { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: 1px 8px; font-size: .8125rem; }
+  .chip.mine { border-color: var(--mine); background: #DDEFE9; }
+
+  /* ---------- Metin efektleri (¢) ---------- */
+  .pill { background: #14202B; border-radius: 6px; padding: 0 5px; }
+  .fx-glow { text-shadow: 0 0 6px currentColor, 0 0 14px currentColor; }
+  .fx-shake { display: inline-block; max-width: 100%; animation: shake .5s linear infinite; }
+  @keyframes shake { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-1px, 1px) rotate(-1.2deg); } 75% { transform: translate(1px, -1px) rotate(1.2deg); } }
+  .fx-rgb {
+    background: linear-gradient(90deg, #ff4d4d, #ffb84d, #ffee4d, #4dff7a, #4dc3ff, #9b6bff, #ff4dd2, #ff4d4d);
+    background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; animation: rgbmove 3s linear infinite;
+  }
+  @keyframes rgbmove { to { background-position: 300% 0; } }
+
+  #newPill { position: absolute; left: 50%; transform: translateX(-50%); bottom: 84px; border: 0; background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: .875rem; box-shadow: 0 2px 8px rgba(20,32,43,.3); z-index: 2; }
+  #typing { min-height: 22px; padding: 2px 16px 0; font-size: .8125rem; color: var(--muted); }
+
+  /* ---------- Yazma alanı ---------- */
+  #replyBar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #fff; border-top: 1px solid var(--line); border-left: 4px solid var(--accent); font-size: .875rem; }
+  #replyBar .rb-text { flex: 1; min-width: 0; }
+  #replyBar b { display: block; font-size: .75rem; color: var(--mine); }
+  #replyBar span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  #replyBar button { border: 0; background: none; font-size: 1.1rem; padding: 6px; color: var(--muted); }
+  form#composer { display: flex; align-items: flex-end; gap: 6px; padding: 6px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .cbtn { flex: none; width: 42px; height: 42px; border: 0; border-radius: 50%; background: #DDE3EA; font-size: 1.15rem; font-weight: 800; display: grid; place-items: center; }
+  .cbtn.on { background: var(--accent); }
+  #input { flex: 1; min-width: 0; resize: none; max-height: 140px; padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 22px; background: #fff; line-height: 1.35; }
+  #input:focus { border-color: var(--mine); outline: none; }
+  #send { flex: none; width: 46px; height: 46px; border: 0; border-radius: 50%; background: var(--accent); color: var(--ink); display: grid; place-items: center; }
+  #send:active { transform: scale(.94); }
+  #send svg { width: 22px; height: 22px; }
+
+  /* ---------- Alt paneller ---------- */
+  .sheet-wrap { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; }
+  .backdrop { position: absolute; inset: 0; background: rgba(20,32,43,.45); }
+  .sheet { position: relative; background: #fff; border-radius: 18px 18px 0 0; max-height: 86dvh; overflow-y: auto; width: 100%; max-width: 680px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom); }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; position: sticky; top: 0; background: #fff; z-index: 1; }
+  .sheet-head .x { border: 0; background: none; font-size: 1.1rem; color: var(--muted); padding: 4px 8px; }
+  .sheet-body { padding: 4px 8px 14px; }
+  .menu-item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 12px; border: 0; background: none; text-align: left; border-radius: 10px; font-size: 1rem; }
+  .menu-item:active { background: #F2F5F8; }
+  .menu-item.danger { color: var(--danger); }
+  .menu-item .mi { width: 26px; text-align: center; font-size: 1.15rem; }
+  .react-row { display: flex; justify-content: space-around; padding: 6px 4px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .emo { border: 0; background: none; font-size: 1.7rem; border-radius: 50%; width: 46px; height: 46px; }
+  .emo.on { background: #DDEFE9; }
+  .person { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 10px; }
+  .person.click { cursor: pointer; }
+  .person.click:active { background: #F2F5F8; }
+  .person .pmain { flex: 1; min-width: 0; }
+  .person .pname { font-weight: 700; overflow-wrap: anywhere; }
+  .person .pnote { font-size: .8125rem; color: var(--muted); }
+  .person .pedit { border: 0; background: #EDF0F5; border-radius: 8px; padding: 6px 10px; }
+  .inline-edit { display: flex; gap: 6px; flex: 1; }
+  .inline-edit input { flex: 1; min-width: 0; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 8px; }
+  .inline-edit button { border: 0; border-radius: 8px; padding: 8px 12px; background: var(--mine); color: var(--mine-ink); font-weight: 700; }
+  .inline-edit button.ghost { background: #EDF0F5; color: var(--ink); }
+  .form-row { padding: 6px 8px 10px; }
+  .form-row input[type=text] { width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 10px; }
+  .pick { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; cursor: pointer; }
+  .pick input { width: 20px; height: 20px; accent-color: var(--mine); }
+  .btn-wide { display: block; width: calc(100% - 16px); margin: 8px; padding: 13px; border: 0; border-radius: 10px; background: var(--mine); color: var(--mine-ink); font-weight: 700; }
+  .btn-wide.ghost { background: #EDF0F5; color: var(--ink); }
+  .btn-wide.danger { background: #FBE9E7; color: var(--danger); }
+  .btn-wide:disabled { opacity: .6; }
+  .hint { padding: 4px 12px 8px; font-size: .8125rem; color: var(--muted); }
+  .pin-item { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); margin: 6px 4px; cursor: pointer; }
+  .pin-item b { display: block; font-size: .8125rem; color: var(--mine); }
+  .pin-item div { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+  /* ---------- Stil paleti ---------- */
+  .style-preview { margin: 6px 8px 10px; padding: 14px; border-radius: 14px; background: var(--paper); text-align: center; min-height: 64px; display: grid; place-items: center; }
+  .style-preview .bubble { display: inline-block; max-width: 100%; }
+  .code-label { display: block; text-align: center; margin: 0 0 8px; color: var(--muted); font-size: .875rem; }
+  .swatches { display: flex; gap: 10px; justify-content: center; padding: 4px 8px 10px; }
+  .sw { border: 3px solid transparent; width: 66px; height: 54px; border-radius: 14px; font-weight: 800; color: #14202B; display: grid; place-items: center; line-height: 1.1; }
+  .sw small { font-weight: 600; font-size: .6875rem; }
+  .sw.on { border-color: var(--ink); }
+  .flags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 4px 8px 10px; }
+  .flag { border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 14px; font-weight: 700; }
+  .flag.on { background: var(--mine); border-color: var(--mine); color: var(--mine-ink); }
+
+  /* ---------- Büyük resim ---------- */
+  .lightbox { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.93); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px; }
+  .lightbox img { max-width: 100%; max-height: 80dvh; border-radius: 6px; }
+  .lightbox .lb-bar { display: flex; gap: 10px; }
+  .lightbox button { border: 0; border-radius: 999px; padding: 10px 18px; background: rgba(255,255,255,.18); color: #fff; font-weight: 700; }
+
+  #toast { position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .9375rem; max-width: calc(100% - 32px); z-index: 40; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+    .fx-rgb, .fx-shake, .row.hl .bubble { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<main id="auth" hidden>
+  <h1>Bizimki</h1>
+  <p class="tagline">Sadece arkadaşların için özel sohbet odası.</p>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabLogin" aria-selected="true">Giriş yap</button>
+    <button type="button" role="tab" id="tabRegister" aria-selected="false">Kayıt ol</button>
+  </div>
+  <form id="authForm" autocomplete="on">
+    <label class="field"><span>Kullanıcı adı</span>
+      <input id="username" name="username" autocomplete="username" autocapitalize="none" required minlength="3" maxlength="20">
+    </label>
+    <label class="field"><span>Şifre</span>
+      <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
+    </label>
+    <label class="field" id="inviteField" hidden><span>Davet kodu</span>
+      <input id="invite" name="invite" autocomplete="off" autocapitalize="none">
+    </label>
+    <button class="primary" id="authSubmit" type="submit">Giriş yap</button>
+    <p class="form-error" id="authError" role="alert"></p>
+  </form>
+</main>
+
+<div id="app" hidden>
+  <div id="banner" hidden>Bağlantı koptu, yeniden bağlanılıyor…</div>
+
+  <section id="home" class="view">
+    <header class="top">
+      <div class="title"><h2>Bizimki</h2><div class="sub" id="presence"></div></div>
+      <button type="button" class="ibtn" id="btnNew" aria-label="Yeni sohbet">✎</button>
+      <button type="button" class="ibtn" id="btnMenu" aria-label="Menü">⋮</button>
+    </header>
+    <div id="slotHome"></div>
+    <div id="convList"></div>
+  </section>
+
+  <section id="chat" class="view" hidden>
+    <header class="top">
+      <button type="button" class="ibtn" id="btnBack" aria-label="Geri">←</button>
+      <button type="button" class="title" id="chatTitle"><h2 id="chatName"></h2><div class="sub" id="chatSub"></div></button>
+    </header>
+    <div id="slotChat"></div>
+    <div id="pinBar" hidden></div>
+    <div id="messages" aria-live="polite"></div>
+    <button type="button" id="newPill" hidden>Yeni mesajlar</button>
+    <div id="typing" aria-live="polite"></div>
+    <div id="replyBar" hidden>
+      <div class="rb-text"></div>
+      <button type="button" id="replyClose" aria-label="Vazgeç">✕</button>
+    </div>
+    <form id="composer">
+      <button type="button" class="cbtn" id="btnAttach" aria-label="Fotoğraf veya dosya ekle">📎</button>
+      <button type="button" class="cbtn" id="btnStyle" aria-label="Yazı stili">¢</button>
+      <textarea id="input" rows="1" maxlength="2000" placeholder="Mesaj yaz" aria-label="Mesaj"></textarea>
+      <button id="send" type="submit" aria-label="Gönder">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12 2-12 2z"/></svg>
+      </button>
+    </form>
+    <input type="file" id="pickPhoto" accept="image/*" hidden>
+    <input type="file" id="pickFile" hidden>
+  </section>
+</div>
+
+<div id="voice">
+  <span id="voiceInfo">Sesli oda boş</span>
+  <button type="button" id="voiceMute" class="ghost" hidden>Sustur</button>
+  <button type="button" id="voiceToggle">Başlat</button>
+</div>
+<div id="voiceAudio" hidden></div>
+<div id="toast" role="status" hidden></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+  const lsDel = (k) => { try { localStorage.removeItem(k); } catch (_) {} };
+
+  // Güvenli eleman üretici: metinler hep textContent ile eklenir, innerHTML kullanılmaz.
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    if (props) {
+      for (const [k, v] of Object.entries(props)) {
+        if (v == null || v === false) continue;
+        if (k === 'class') el.className = v;
+        else if (k === 'text') el.textContent = v;
+        else if (k === 'style') el.style.cssText = v;
+        else if (k === 'value') el.value = v;
+        else if (k === 'dataset') Object.assign(el.dataset, v);
+        else if (k === 'checked' || k === 'disabled' || k === 'hidden') el[k] = !!v;
+        else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+        else el.setAttribute(k, v === true ? '' : v);
+      }
+    }
+    for (const kid of kids.flat(Infinity)) {
+      if (kid == null || kid === false) continue;
+      el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+
+  // replaceChildren, null/false değerleri "null" yazısına çevirdiği için süzerek doldurur.
+  const fill = (el, ...kids) => { el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false)); };
+
+  const NAME_COLORS = ['#B4322F', '#1F6FB2', '#8A4FB3', '#B26A00', '#2C7A3F', '#C0407A', '#456B7A'];
+  const REACTS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👎'];
+  const MAX_FILE = 3 * 1024 * 1024;
+
+  let storedMe = null;
+  try { storedMe = JSON.parse(lsGet('me') || 'null'); } catch (_) {}
+  const S = {
+    token: lsGet('token'),
+    me: storedMe,
+    socket: null,
+    users: new Map(),
+    convs: [],
+    convMap: new Map(),
+    cur: null,
+    msgs: new Map(),
+    pins: new Map(),
+    typing: new Map(),
+    online: new Set(),
+    drafts: new Map(),
+    compose: { reply: null, edit: null },
+    sentRead: new Map(),
+    loadingOlder: false,
+    hasConnectedOnce: false,
+  };
+
+  // ---------- Yardımcılar ----------
+  async function api(path, { method = 'GET', body } = {}) {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(S.token ? { Authorization: 'Bearer ' + S.token } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || 'Bir şeyler ters gitti. Tekrar dene.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+  function failed(err) {
+    if (err && err.status === 401) { logout(); return; }
+    toast((err && err.message) || 'Bir şeyler ters gitti.');
+  }
+
+  let toastTimer;
+  function toast(text, ms = 3500) {
+    const el = $('#toast');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    if (ms) toastTimer = setTimeout(() => (el.hidden = true), ms);
+  }
+  const hideToast = () => { $('#toast').hidden = true; };
+
+  function colorFor(name) {
+    let hash = 0;
+    for (const ch of String(name)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+    return NAME_COLORS[hash % NAME_COLORS.length];
+  }
+  const initial = (name) => (Array.from(String(name || '?'))[0] || '?').toLocaleUpperCase('tr-TR');
+  const dayKey = (t) => new Date(t).toDateString();
+  function dayLabel(t) {
+    const d = new Date(t), today = new Date(), yest = new Date();
+    yest.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Bugün';
+    if (d.toDateString() === yest.toDateString()) return 'Dün';
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+  }
+  const timeLabel = (t) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  function listTime(t) {
+    const d = new Date(t), today = new Date(), yest = new Date();
+    yest.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return timeLabel(t);
+    if (d.toDateString() === yest.toDateString()) return 'Dün';
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+  }
+  const fmtSize = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
+
+  // ---------- Metin efektleri: ¢ kodları ----------
+  // Tüm mesaj:  ¢12b Merhaba     Parça:  ¢3{kırmızı} kelime
+  // Renkler: 1 mavi, 2 sarı, 3 kırmızı (karışım: 12 yeşil, 13 mor, 23 turuncu, 123 kahve)
+  // Harfler: b kalın, i yatık, u altı çizili, s üstü çizili, m daktilo, x büyük, k küçük,
+  //          g parlama, t titreşim, rgb rengarenk
+  const COLORS = {
+    '1': ['Mavi', '#4DA3FF'], '2': ['Sarı', '#FFD43B'], '3': ['Kırmızı', '#FF5C5C'],
+    '12': ['Yeşil', '#3DDC84'], '13': ['Mor', '#B388FF'], '23': ['Turuncu', '#FFA94D'], '123': ['Kahverengi', '#C8956D'],
+  };
+  const FLAG_ORDER = 'biusmxkgt';
+  const FLAG_NAMES = { b: 'Kalın', i: 'Yatık', u: 'Altı çizili', s: 'Üstü çizili', m: 'Daktilo', x: 'Büyük', k: 'Küçük', g: 'Parlama', t: 'Titreşim' };
+
+  function parseCode(token) {
+    const t = String(token).toLowerCase();
+    const st = { digits: new Set(), flags: new Set(), rgb: false };
+    let i = 0;
+    while (i < t.length) {
+      if (t.startsWith('rgb', i)) { st.rgb = true; i += 3; continue; }
+      const c = t[i];
+      if (c === '1' || c === '2' || c === '3') st.digits.add(c);
+      else if (FLAG_ORDER.includes(c)) st.flags.add(c);
+      else return null;
+      i++;
+    }
+    return st;
+  }
+  const colorKey = (st) => (st ? [...st.digits].sort().join('') : '');
+  const isColored = (st) => !!(st && (st.rgb || st.flags.has('g') || (colorKey(st) && COLORS[colorKey(st)])));
+  const hasStyle = (st) => !!(st && (st.rgb || st.digits.size || st.flags.size));
+  function mergeStyle(a, b) {
+    return {
+      digits: new Set([...(a ? a.digits : []), ...b.digits]),
+      flags: new Set([...(a ? a.flags : []), ...b.flags]),
+      rgb: !!((a && a.rgb) || b.rgb),
+    };
+  }
+  function buildCode(st) {
+    return (st.rgb ? 'rgb' : '') + ['1', '2', '3'].filter((d) => st.digits.has(d)).join('') + [...FLAG_ORDER].filter((f) => st.flags.has(f)).join('');
+  }
+  function parsePrefix(raw) {
+    const mm = /^¢([0-9A-Za-z]+)(?:\s+|$)/.exec(raw);
+    if (!mm) return null;
+    const st = parseCode(mm[1]);
+    return st ? { st, rest: raw.slice(mm[0].length), code: mm[1] } : null;
+  }
+  function styledNode(text, st, pill) {
+    if (!hasStyle(st)) return document.createTextNode(text);
+    const cls = [];
+    const css = [];
+    const key = colorKey(st);
+    if (st.rgb) cls.push('fx-rgb');
+    else if (key && COLORS[key]) css.push('color:' + COLORS[key][1]);
+    if (st.flags.has('b')) css.push('font-weight:800');
+    if (st.flags.has('i')) css.push('font-style:italic');
+    const deco = [st.flags.has('u') ? 'underline' : '', st.flags.has('s') ? 'line-through' : ''].filter(Boolean).join(' ');
+    if (deco) css.push('text-decoration:' + deco);
+    if (st.flags.has('m')) css.push('font-family:ui-monospace,Menlo,Consolas,monospace');
+    if (st.flags.has('x')) css.push('font-size:1.55em;line-height:1.2');
+    else if (st.flags.has('k')) css.push('font-size:.75em');
+    if (st.flags.has('g')) {
+      cls.push('fx-glow');
+      // Renk seçilmediyse parlama beyaz yazıyla görünür (koyu zemin üzerinde).
+      if (!st.rgb && !(key && COLORS[key])) css.push('color:#fff');
+    }
+    if (st.flags.has('t')) cls.push('fx-shake');
+    const inner = h('span', { class: cls.join(' ') || null, style: css.join(';') || null }, text);
+    return pill && isColored(st) ? h('span', { class: 'pill' }, inner) : inner;
+  }
+  function renderStyled(raw) {
+    const frag = document.createDocumentFragment();
+    const pre = parsePrefix(raw);
+    const base = pre ? pre.st : null;
+    const text = pre ? pre.rest : raw;
+    const pillInline = !isColored(base);
+    const re = /¢([0-9A-Za-z]+)\{([^{}]*)\}/g;
+    let last = 0, m;
+    const push = (t, st, pill) => { if (t) frag.append(styledNode(t, st, pill)); };
+    while ((m = re.exec(text))) {
+      const st = parseCode(m[1]);
+      push(text.slice(last, m.index), base, false);
+      if (st) push(m[2], mergeStyle(base, st), pillInline);
+      else push(m[0], base, false);
+      last = m.index + m[0].length;
+    }
+    push(text.slice(last), base, false);
+    return { frag, bubbleStyled: isColored(base) };
+  }
+  function plainText(raw) {
+    const pre = parsePrefix(raw);
+    const text = pre ? pre.rest : raw;
+    return text.replace(/¢([0-9A-Za-z]+)\{([^{}]*)\}/g, (all, code, inner) => (parseCode(code) ? inner : all));
+  }
+
+  // ---------- İsimler ve sohbet yardımcıları ----------
+  const tagOf = (userId, fallback) => { const u = S.users.get(userId); return u ? u.tag : fallback || ''; };
+  function nameNode(userId, username, color) {
+    const tag = tagOf(userId);
+    return h('span', { class: 'nm' }, h('span', { class: 'nm-name', text: username, style: color ? 'color:' + color : null }), tag ? h('span', { class: 'tag', text: '(' + tag + ')' }) : null);
+  }
+  const otherMember = (c) => c.members.find((m) => m.id !== S.me.id) || c.members[0];
+  const convName = (c) => (c.type === 'dm' ? (otherMember(c) || {}).username || 'Sohbet' : c.name);
+  function convTitleNode(c) {
+    if (c.type === 'dm') { const o = otherMember(c); return o ? nameNode(o.id, o.username) : 'Sohbet'; }
+    return c.name;
+  }
+  const curConv = () => (S.cur != null ? S.convMap.get(S.cur) : null);
+  const isOnline = (name) => S.online.has(name);
+  function previewOf(m) {
+    if (!m) return '';
+    if (m.deleted) return '🚫 Mesaj silindi';
+    if (m.kind === 'image') return '📷 Fotoğraf';
+    if (m.kind === 'file') return '📎 ' + (m.file ? m.file.name : 'Dosya');
+    return plainText(m.body).replace(/\s+/g, ' ').slice(0, 90);
+  }
+  const chatVisible = () => S.cur != null && !document.hidden && !$('#chat').hidden;
+
+  // ---------- Alt paneller ----------
+  let sheetEl = null;
+  function openSheet(title, content, { onClose } = {}) {
+    closeSheet();
+    const wrap = h('div', { class: 'sheet-wrap' },
+      h('div', { class: 'backdrop', onclick: () => closeSheet() }),
+      h('div', { class: 'sheet', role: 'dialog', 'aria-label': title || 'Menü' },
+        title ? h('div', { class: 'sheet-head' }, h('strong', { text: title }), h('button', { type: 'button', class: 'x', 'aria-label': 'Kapat', text: '✕', onclick: () => closeSheet() })) : null,
+        h('div', { class: 'sheet-body' }, content)));
+    wrap._onClose = onClose;
+    document.body.append(wrap);
+    sheetEl = wrap;
+  }
+  function closeSheet() {
+    if (!sheetEl) return;
+    const w = sheetEl;
+    sheetEl = null;
+    w.remove();
+    if (w._onClose) w._onClose();
+  }
+  function setSheet(title, content) {
+    const wrap = sheetEl;
+    if (!wrap) return openSheet(title, content);
+    const onClose = wrap._onClose;
+    wrap._onClose = null;
+    openSheet(title, content, { onClose });
+  }
+  const menuItem = (icon, label, fn, danger) =>
+    h('button', { type: 'button', class: 'menu-item' + (danger ? ' danger' : ''), onclick: fn }, h('span', { class: 'mi', text: icon }), h('span', { text: label }));
+
+  // ---------- Giriş / kayıt ----------
+  let mode = 'login';
+  function setMode(next) {
+    mode = next;
+    const reg = mode === 'register';
+    $('#tabLogin').setAttribute('aria-selected', String(!reg));
+    $('#tabRegister').setAttribute('aria-selected', String(reg));
+    $('#inviteField').hidden = !reg;
+    $('#invite').required = reg;
+    $('#password').autocomplete = reg ? 'new-password' : 'current-password';
+    $('#authSubmit').textContent = reg ? 'Kayıt ol' : 'Giriş yap';
+    $('#authError').textContent = '';
+  }
+  $('#tabLogin').onclick = () => setMode('login');
+  $('#tabRegister').onclick = () => setMode('register');
+
+  $('#authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#authSubmit');
+    btn.disabled = true;
+    $('#authError').textContent = '';
+    try {
+      const body = { username: $('#username').value, password: $('#password').value };
+      if (mode === 'register') body.invite = $('#invite').value;
+      const data = await api(mode === 'register' ? '/api/register' : '/api/login', { method: 'POST', body });
+      S.token = data.token;
+      S.me = data.user;
+      lsSet('token', S.token);
+      lsSet('me', JSON.stringify(S.me));
+      $('#password').value = '';
+      startApp();
+    } catch (err) {
+      $('#authError').textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function showAuth() {
+    $('#app').hidden = true;
+    $('#auth').hidden = false;
+    $('#voice').hidden = true;
+  }
+
+  async function logout() {
+    cleanupVoice(true);
+    try { await api('/api/logout', { method: 'POST' }); } catch (_) {}
+    S.token = null;
+    S.me = null;
+    lsDel('token');
+    lsDel('me');
+    if (S.socket) { S.socket.disconnect(); S.socket = null; }
+    S.hasConnectedOnce = false;
+    S.cur = null;
+    S.msgs.clear();
+    S.pins.clear();
+    S.convs = [];
+    S.convMap.clear();
+    closeSheet();
+    showAuth();
+  }
+
+  // ---------- Sohbet listesi ----------
+  const convList = $('#convList');
+  const lastActivity = (c) => (c.lastMessage ? c.lastMessage.createdAt : c.createdAt);
+  function typingNames(convId) {
+    const m = S.typing.get(convId);
+    return m ? [...m.keys()] : [];
+  }
+  function renderConvList() {
+    S.convs.sort((a, b) => lastActivity(b) - lastActivity(a));
+    convList.replaceChildren();
+    if (!S.convs.length) {
+      convList.append(h('div', { class: 'list-empty', text: 'Henüz sohbet yok. Sağ üstteki ✎ ile başla.' }));
+      return;
+    }
+    for (const c of S.convs) {
+      const dm = c.type === 'dm';
+      const o = dm ? otherMember(c) : null;
+      const name = convName(c);
+      const m = c.lastMessage;
+      const typers = typingNames(c.id);
+      let prev = '';
+      if (m) {
+        const who = m.kind === 'system' ? '' : m.userId === S.me.id ? 'Sen: ' : !dm ? m.username + ': ' : '';
+        prev = who + previewOf(m);
+      }
+      convList.append(
+        h('div', { class: 'conv', dataset: { id: c.id }, onclick: () => openChat(c.id) },
+          h('div', { class: 'avatar', style: 'background:' + colorFor(name) }, dm ? initial(name) : '👥', dm && o && isOnline(o.username) ? h('span', { class: 'dot' }) : null),
+          h('div', { class: 'conv-main' },
+            h('div', { class: 'conv-top' }, h('div', { class: 'conv-name' }, convTitleNode(c)), m ? h('div', { class: 'conv-time', text: listTime(m.createdAt) }) : null),
+            h('div', { class: 'conv-bottom' },
+              h('div', { class: 'conv-prev' + (typers.length ? ' typing' : ''), text: typers.length ? (dm ? 'yazıyor…' : typers.join(', ') + ' yazıyor…') : prev }),
+              c.unread > 0 ? h('div', { class: 'badge', text: c.unread > 99 ? '99+' : String(c.unread) }) : null))));
+    }
+  }
+
+  async function loadUsers() {
+    const { users } = await api('/api/users');
+    S.users = new Map(users.map((u) => [u.id, u]));
+  }
+  async function loadConvs() {
+    const { conversations } = await api('/api/conversations');
+    S.convs = conversations;
+    S.convMap = new Map(conversations.map((c) => [c.id, c]));
+    if (chatVisible() && S.convMap.has(S.cur)) S.convMap.get(S.cur).unread = 0;
+    if (S.cur != null && !S.convMap.has(S.cur)) leaveChatView();
+    renderConvList();
+    if (S.cur != null) { updateChatHeader(); updateTicks(); }
+  }
+  function upsertConv(c) {
+    const i = S.convs.findIndex((x) => x.id === c.id);
+    if (i >= 0) S.convs[i] = c; else S.convs.push(c);
+    S.convMap.set(c.id, c);
+  }
+  function updatePresenceLine() {
+    const n = S.online.size;
+    $('#presence').textContent = n ? n + ' kişi çevrimiçi: ' + [...S.online].join(', ') : '';
+  }
+
+  // ---------- Sohbet ekranı ----------
+  const list = $('#messages');
+  const input = $('#input');
+  const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const scrollToBottom = () => { list.scrollTop = list.scrollHeight; $('#newPill').hidden = true; };
+  list.addEventListener('scroll', () => {
+    if (nearBottom()) $('#newPill').hidden = true;
+    if (list.scrollTop < 80) loadOlder();
+  });
+  $('#newPill').onclick = scrollToBottom;
+
+  function ensureStore(id) {
+    let s = S.msgs.get(id);
+    if (!s) { s = { list: [], map: new Map(), hasMore: true, loaded: false }; S.msgs.set(id, s); }
+    return s;
+  }
+  function setStore(id, messages, hasMore) {
+    const s = ensureStore(id);
+    s.list = messages.slice();
+    s.map = new Map(messages.map((m) => [m.id, m]));
+    s.hasMore = hasMore;
+    s.loaded = true;
+    return s;
+  }
+  const msgById = (id) => { const s = S.msgs.get(S.cur); return s ? s.map.get(id) : null; };
+
+  function placeVoice() {
+    $('#voice').hidden = false;
+    (S.cur != null ? $('#slotChat') : $('#slotHome')).append($('#voice'));
+  }
+
+  function leaveChatView() {
+    if (S.cur != null) saveDraft();
+    S.cur = null;
+    clearCompose();
+    $('#chat').hidden = true;
+    $('#home').hidden = false;
+    placeVoice();
+    renderConvList();
+  }
+  function saveDraft() {
+    if (S.cur == null || S.compose.edit) return;
+    const v = input.value;
+    if (v) S.drafts.set(S.cur, v); else S.drafts.delete(S.cur);
+  }
+
+  async function openChat(id) {
+    const c = S.convMap.get(id);
+    if (!c) return;
+    if (S.cur != null) saveDraft();
+    const wasOpen = S.cur != null;
+    S.cur = id;
+    if (wasOpen) history.replaceState({ chat: id }, ''); else history.pushState({ chat: id }, '');
+    $('#home').hidden = true;
+    $('#chat').hidden = false;
+    placeVoice();
+    clearCompose();
+    input.value = S.drafts.get(id) || '';
+    autosize();
+    updateChatHeader();
+    updatePinBar();
+    renderTyping();
+    const store = ensureStore(id);
+    if (store.loaded) {
+      renderAll();
+      scrollToBottom();
+    } else {
+      list.replaceChildren(h('div', { class: 'empty', text: 'Yükleniyor…' }));
+      try {
+        const { messages, hasMore } = await api(`/api/conversations/${id}/messages`);
+        setStore(id, messages, hasMore);
+      } catch (err) {
+        if (S.cur === id) { toast(err.message); leaveChatView(); }
+        return;
+      }
+      if (S.cur !== id) return;
+      renderAll();
+      scrollToBottom();
+    }
+    loadPins(id);
+    scheduleRead();
+  }
+
+  async function loadOlder() {
+    const id = S.cur;
+    const store = id != null ? S.msgs.get(id) : null;
+    if (!store || !store.loaded || !store.hasMore || S.loadingOlder || !store.list.length) return false;
+    S.loadingOlder = true;
+    try {
+      const first = store.list[0].id;
+      const { messages, hasMore } = await api(`/api/conversations/${id}/messages?before=${first}`);
+      if (S.cur !== id) return false;
+      const fresh = messages.filter((m) => !store.map.has(m.id));
+      store.hasMore = hasMore && fresh.length > 0;
+      if (fresh.length) {
+        const prevH = list.scrollHeight, prevTop = list.scrollTop;
+        store.list = fresh.concat(store.list);
+        for (const m of fresh) store.map.set(m.id, m);
+        renderAll();
+        list.scrollTop = list.scrollHeight - prevH + prevTop;
+      }
+      return fresh.length > 0;
+    } catch (_) {
+      return false;
+    } finally {
+      S.loadingOlder = false;
+    }
+  }
+
+  function updateChatHeader() {
+    const c = curConv();
+    if (!c) return;
+    $('#chatName').replaceChildren(convTitleNode(c));
+    const typers = typingNames(c.id);
+    let sub;
+    if (typers.length) sub = c.type === 'dm' ? 'yazıyor…' : typers.join(', ') + ' yazıyor…';
+    else if (c.type === 'dm') { const o = otherMember(c); sub = o && isOnline(o.username) ? 'çevrimiçi' : ''; }
+    else sub = c.members.length + ' üye · ' + c.members.filter((m) => isOnline(m.username)).length + ' çevrimiçi';
+    $('#chatSub').textContent = sub;
+  }
+  function renderTyping() {
+    const c = curConv();
+    const names = c ? typingNames(c.id) : [];
+    $('#typing').textContent = names.length ? names.join(', ') + ' yazıyor…' : '';
+    updateChatHeader();
+  }
+
+  // ----- Tik / okundu bilgisi -----
+  function tickInfo(m) {
+    const c = S.convMap.get(m.convId);
+    if (!c) return { text: '✓', read: false, title: 'Gönderildi' };
+    const others = c.members.filter((x) => x.id !== S.me.id);
+    const readBy = others.filter((x) => x.lastReadId >= m.id);
+    if (!others.length || !readBy.length) return { text: '✓', read: false, title: 'Gönderildi' };
+    const all = readBy.length === others.length;
+    return { text: c.type === 'dm' || all ? '✓✓' : '✓✓ ' + readBy.length, read: all, title: 'Görenler: ' + readBy.map((x) => x.username).join(', ') };
+  }
+  function updateTicks() {
+    for (const el of list.querySelectorAll('.tick[data-id]')) {
+      const m = msgById(Number(el.dataset.id));
+      if (!m) continue;
+      const t = tickInfo(m);
+      el.textContent = t.text;
+      el.title = t.title;
+      el.classList.toggle('read', t.read);
+    }
+  }
+
+  // ----- Satır oluşturma -----
+  function buildRow(m, grouped) {
+    if (m.kind === 'system' && !m.deleted) {
+      return h('div', { class: 'sys', dataset: { id: m.id }, text: m.body });
+    }
+    const c = S.convMap.get(m.convId);
+    const mine = m.userId === S.me.id;
+    const isGroup = c && c.type === 'group';
+    const bubble = h('div', { class: 'bubble' + (m.deleted ? ' deleted' : '') });
+    if (m.deleted) {
+      bubble.append(h('span', { class: 'text', text: '🚫 Bu mesaj silindi' }));
+    } else {
+      if (m.replyTo) {
+        const r = m.replyTo;
+        const snippet = r.deleted ? 'Silinmiş mesaj' : r.kind === 'image' ? '📷 Fotoğraf' : r.kind === 'file' ? '📎 ' + (r.fileName || 'Dosya') : plainText(r.body).replace(/\s+/g, ' ');
+        bubble.append(h('div', { class: 'quote', dataset: { jump: r.id } }, h('b', { text: r.username || '…' }), h('span', { text: snippet })));
+      }
+      if (m.kind === 'image' && m.file) {
+        const img = h('img', { class: 'pic', alt: 'Fotoğraf', dataset: { fid: m.file.id } });
+        img.addEventListener('load', () => { if (img.src) img.classList.add('ok'); });
+        bubble.append(img);
+        queueImage(img);
+      } else if (m.kind === 'file' && m.file) {
+        bubble.append(h('div', { class: 'filecard', dataset: { fid: m.file.id } },
+          h('div', { class: 'ficon', text: '📄' }),
+          h('div', null, h('div', { class: 'fname', text: m.file.name }), h('div', { class: 'fsize', text: fmtSize(m.file.size) }))));
+      } else {
+        const { frag, bubbleStyled } = renderStyled(m.body);
+        bubble.append(h('span', { class: 'text' }, frag));
+        if (bubbleStyled) bubble.classList.add('styled');
+      }
+      const metaKids = [];
+      if (m.editedAt) metaKids.push(h('span', { text: m.editedByAdmin ? 'yönetici düzenledi' : 'düzenlendi' }));
+      metaKids.push(h('span', { text: timeLabel(m.createdAt) }));
+      if (mine) {
+        const t = tickInfo(m);
+        metaKids.push(h('span', { class: 'tick' + (t.read ? ' read' : ''), dataset: { id: m.id }, title: t.title, text: t.text }));
+      }
+      bubble.append(h('div', { class: 'meta' }, metaKids));
+    }
+    const row = h('div', { class: 'row ' + (mine ? 'mine' : 'theirs') + (grouped ? ' grouped' : ''), dataset: { id: m.id, grouped: grouped ? '1' : '' } });
+    if (!mine && !grouped && isGroup) row.append(h('div', { class: 'name' }, nameNode(m.userId, m.username, colorFor(m.username))));
+    row.append(bubble);
+    const rx = Object.entries(m.reactions || {}).filter(([, ids]) => ids.length);
+    if (rx.length && !m.deleted) {
+      row.append(h('div', { class: 'reacts' }, rx.map(([emoji, ids]) =>
+        h('button', { type: 'button', class: 'chip' + (ids.includes(S.me.id) ? ' mine' : ''), dataset: { emoji }, text: emoji + ' ' + ids.length }))));
+    }
+    return row;
+  }
+  const isGrouped = (m, prev) =>
+    !!prev && prev.kind !== 'system' && m.kind !== 'system' && dayKey(prev.createdAt) === dayKey(m.createdAt) && prev.userId === m.userId && m.createdAt - prev.createdAt < 5 * 60 * 1000;
+
+  function renderAll() {
+    const store = S.msgs.get(S.cur);
+    list.replaceChildren();
+    if (!store || !store.list.length) {
+      list.append(h('div', { class: 'empty', text: 'Henüz mesaj yok. İlk mesajı sen yaz.' }));
+      return;
+    }
+    let prev = null;
+    for (const m of store.list) {
+      if (!prev || dayKey(prev.createdAt) !== dayKey(m.createdAt)) list.append(h('div', { class: 'day', text: dayLabel(m.createdAt) }));
+      list.append(buildRow(m, isGrouped(m, prev)));
+      prev = m;
+    }
+  }
+  function appendRow(m, prev) {
+    const empty = list.querySelector('.empty');
+    if (empty) empty.remove();
+    if (!prev || dayKey(prev.createdAt) !== dayKey(m.createdAt)) list.append(h('div', { class: 'day', text: dayLabel(m.createdAt) }));
+    list.append(buildRow(m, isGrouped(m, prev)));
+  }
+  function replaceRow(m) {
+    const old = list.querySelector(`[data-id="${m.id}"]`);
+    if (!old) return;
+    old.replaceWith(buildRow(m, old.dataset.grouped === '1'));
+  }
+
+  // ----- Resimler -----
+  const blobCache = new Map();
+  function fileBlobUrl(fid) {
+    if (!blobCache.has(fid)) {
+      blobCache.set(fid, fetch('/api/files/' + fid, { headers: { Authorization: 'Bearer ' + S.token } })
+        .then((r) => { if (!r.ok) throw new Error('x'); return r.blob(); })
+        .then((b) => URL.createObjectURL(b))
+        .catch((e) => { blobCache.delete(fid); throw e; }));
+    }
+    return blobCache.get(fid);
+  }
+  const imgObserver = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      imgObserver.unobserve(en.target);
+      const img = en.target;
+      fileBlobUrl(Number(img.dataset.fid)).then((u) => { img.src = u; }).catch(() => { img.alt = 'Fotoğraf yüklenemedi'; });
+    }
+  }, { root: list, rootMargin: '300px' });
+  const queueImage = (img) => imgObserver.observe(img);
+
+  let lightbox = null;
+  async function openLightbox(file) {
+    closeLightbox();
+    let url;
+    try { url = await fileBlobUrl(file.id); } catch (_) { toast('Fotoğraf açılamadı.'); return; }
+    lightbox = h('div', { class: 'lightbox' },
+      h('img', { src: url, alt: file.name }),
+      h('div', { class: 'lb-bar' },
+        h('button', { type: 'button', text: '⬇ İndir', onclick: () => downloadFile(file) }),
+        h('button', { type: 'button', text: 'Kapat', onclick: () => closeLightbox() })));
+    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) closeLightbox(); });
+    document.body.append(lightbox);
+    history.pushState({ chat: S.cur, lb: 1 }, '');
+  }
+  function closeLightbox(fromPop) {
+    if (!lightbox) return;
+    lightbox.remove();
+    lightbox = null;
+    if (!fromPop && history.state && history.state.lb) history.back();
+  }
+  async function downloadFile(file) {
+    try {
+      const r = await fetch('/api/files/' + file.id, { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!r.ok) throw new Error('x');
+      const url = URL.createObjectURL(await r.blob());
+      const a = h('a', { href: url, download: file.name });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (_) {
+      toast('Dosya indirilemedi.');
+    }
+  }
+
+  // ----- Sabit mesajlar -----
+  async function loadPins(id) {
+    try {
+      const { pins } = await api(`/api/conversations/${id}/pins`);
+      S.pins.set(id, pins);
+      if (S.cur === id) updatePinBar();
+    } catch (_) {}
+  }
+  function updatePinBar() {
+    const bar = $('#pinBar');
+    const pins = (S.cur != null && S.pins.get(S.cur)) || [];
+    if (!pins.length) { bar.hidden = true; return; }
+    const m = pins[0];
+    bar.hidden = false;
+    fill(bar, h('span', { text: '📌' }), h('span', { class: 'pin-text', text: m.username + ': ' + previewOf(m) }), pins.length > 1 ? h('span', { class: 'pin-count', text: pins.length + ' sabit' }) : null);
+  }
+  $('#pinBar').addEventListener('click', () => openPinsSheet());
+  function openPinsSheet() {
+    const pins = (S.cur != null && S.pins.get(S.cur)) || [];
+    openSheet('Sabit mesajlar', pins.length
+      ? pins.map((m) => h('div', { class: 'pin-item', onclick: () => { closeSheet(); jumpTo(m.id); } }, h('b', { text: m.username + ' · ' + dayLabel(m.createdAt) + ' ' + timeLabel(m.createdAt) }), h('div', { text: previewOf(m) })))
+      : h('div', { class: 'hint', text: 'Sabit mesaj yok.' }));
+  }
+
+  async function jumpTo(id) {
+    const store = S.msgs.get(S.cur);
+    if (!store) return;
+    let tries = 0;
+    while (!store.map.has(id) && store.hasMore && tries < 12) { tries++; if (!(await loadOlder())) break; }
+    const row = list.querySelector(`.row[data-id="${id}"]`);
+    if (!row) { toast('Bu mesaj çok eski, bulunamadı.'); return; }
+    row.scrollIntoView({ block: 'center' });
+    row.classList.remove('hl');
+    void row.offsetWidth;
+    row.classList.add('hl');
+    setTimeout(() => row.classList.remove('hl'), 1500);
+  }
+
+  // ----- Uzun basma ve tıklamalar -----
+  const lp = { timer: null, fired: false, x: 0, y: 0 };
+  const stopLp = () => { clearTimeout(lp.timer); lp.timer = null; };
+  list.addEventListener('pointerdown', (e) => {
+    const row = e.target.closest('.row[data-id]');
+    if (!row || e.button > 0) return;
+    lp.fired = false;
+    lp.x = e.clientX;
+    lp.y = e.clientY;
+    stopLp();
+    lp.timer = setTimeout(() => {
+      lp.fired = true;
+      lp.timer = null;
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} }
+      openMessageMenu(Number(row.dataset.id));
+    }, 420);
+  });
+  list.addEventListener('pointermove', (e) => { if (lp.timer && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 10) stopLp(); });
+  for (const t of ['pointerup', 'pointercancel', 'pointerleave']) list.addEventListener(t, stopLp);
+  list.addEventListener('contextmenu', (e) => {
+    const row = e.target.closest('.row[data-id]');
+    if (!row) return;
+    e.preventDefault();
+    if (!lp.fired) openMessageMenu(Number(row.dataset.id));
+  });
+  list.addEventListener('click', (e) => {
+    if (lp.fired) { lp.fired = false; e.preventDefault(); e.stopPropagation(); return; }
+    const row = e.target.closest('.row[data-id]');
+    const m = row ? msgById(Number(row.dataset.id)) : null;
+    const chip = e.target.closest('.chip');
+    if (chip && m) return react(m.id, chip.dataset.emoji);
+    const quote = e.target.closest('.quote');
+    if (quote) return jumpTo(Number(quote.dataset.jump));
+    const img = e.target.closest('img.pic');
+    if (img && m && m.file) return openLightbox(m.file);
+    const fc = e.target.closest('.filecard');
+    if (fc && m && m.file) return downloadFile(m.file);
+  }, true);
+
+  // ----- Mesaj menüsü -----
+  function openMessageMenu(id) {
+    const m = msgById(id);
+    const c = curConv();
+    if (!m || !c || m.deleted || m.kind === 'system') return;
+    const mine = m.userId === S.me.id;
+    const admin = !!S.me.isAdmin;
+    const myReact = Object.keys(m.reactions || {}).find((e) => m.reactions[e].includes(S.me.id));
+    const items = [];
+    items.push(menuItem('↩️', 'Yanıtla', () => { closeSheet(); beginReply(m); }));
+    if (m.kind === 'text') items.push(menuItem('📋', 'Kopyala', () => { closeSheet(); copyText(plainText(m.body)); }));
+    if (m.file) items.push(menuItem('⬇️', 'İndir', () => { closeSheet(); downloadFile(m.file); }));
+    items.push(menuItem('📌', m.pinnedAt ? 'Sabitlemeyi kaldır' : 'Sabitle', () => { closeSheet(); pinMessage(m.id, !m.pinnedAt); }));
+    if (m.kind === 'text' && (mine || admin)) items.push(menuItem('✏️', 'Düzenle', () => { closeSheet(); beginEdit(m); }));
+    if (mine && c.members.length > 1) items.push(menuItem('👁️', 'Kimler gördü', () => { openReadersSheet(m); }));
+    if (mine || admin) items.push(menuItem('🗑️', 'Sil', () => { closeSheet(); deleteMessage(m); }, true));
+    openSheet('', [
+      h('div', { class: 'react-row' }, REACTS.map((e) => h('button', { type: 'button', class: 'emo' + (myReact === e ? ' on' : ''), text: e, 'aria-label': 'Tepki ' + e, onclick: () => { closeSheet(); react(m.id, e); } }))),
+      items,
+    ]);
+  }
+  function openReadersSheet(m) {
+    const c = curConv();
+    const readers = c.members.filter((x) => x.id !== S.me.id && x.lastReadId >= m.id);
+    const waiting = c.members.filter((x) => x.id !== S.me.id && x.lastReadId < m.id);
+    setSheet('Kimler gördü', [
+      readers.length ? readers.map((x) => h('div', { class: 'person' }, h('div', { class: 'pmain' }, h('div', { class: 'pname' }, nameNode(x.id, x.username)), h('div', { class: 'pnote', text: 'Gördü ✓✓' })))) : h('div', { class: 'hint', text: 'Henüz kimse görmedi.' }),
+      waiting.length ? h('div', { class: 'hint', text: 'Henüz görmeyenler: ' + waiting.map((x) => x.username).join(', ') }) : null,
+    ]);
+  }
+  function copyText(text) {
+    const done = () => toast('Kopyalandı', 1500);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    const ta = h('textarea', { style: 'position:fixed;opacity:0', value: text });
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (_) { toast('Kopyalanamadı.'); }
+    ta.remove();
+  }
+
+  // ----- Mesaj işlemleri (sunucuya gönderir) -----
+  function emit(event, payload) {
+    return new Promise((resolve) => {
+      if (!S.socket || !S.socket.connected) { toast('Bağlantı yok. Bağlanınca tekrar dene.'); return resolve(false); }
+      S.socket.emit(event, payload, (res) => {
+        if (res && res.error) { toast(res.error); return resolve(false); }
+        resolve(true);
+      });
+    });
+  }
+  const react = (id, emoji) => emit('message:react', { id, emoji });
+  const pinMessage = (id, pinned) => emit('message:pin', { id, pinned });
+  function deleteMessage(m) {
+    if (confirm('Bu mesaj herkes için silinsin mi?')) emit('message:delete', { id: m.id });
+  }
+
+  // ----- Yazma alanı: yanıt / düzenleme -----
+  function renderComposeBar() {
+    const bar = $('#replyBar');
+    const { reply, edit } = S.compose;
+    const m = edit || reply;
+    if (!m) { bar.hidden = true; return; }
+    bar.hidden = false;
+    bar.querySelector('.rb-text').replaceChildren(
+      h('b', { text: edit ? 'Mesaj düzenleniyor' : 'Yanıtlanıyor: ' + m.username }),
+      h('span', { text: previewOf(m) }));
+  }
+  function clearCompose() {
+    const wasEditing = !!S.compose.edit;
+    S.compose = { reply: null, edit: null };
+    if (wasEditing) { input.value = S.drafts.get(S.cur) || ''; autosize(); }
+    renderComposeBar();
+  }
+  function beginReply(m) {
+    if (S.compose.edit) { S.compose.edit = null; input.value = ''; autosize(); }
+    S.compose.reply = m;
+    renderComposeBar();
+    input.focus();
+  }
+  function beginEdit(m) {
+    if (!S.compose.edit) saveDraft();
+    S.compose = { reply: null, edit: m };
+    input.value = m.body;
+    autosize();
+    renderComposeBar();
+    input.focus();
+  }
+  $('#replyClose').onclick = () => clearCompose();
+
+  const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
+  let lastTypingEmit = 0;
+  input.addEventListener('input', () => {
+    autosize();
+    const now = Date.now();
+    if (S.socket && S.cur != null && now - lastTypingEmit > 2000) { lastTypingEmit = now; S.socket.emit('typing', { convId: S.cur }); }
+  });
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isTouch) { e.preventDefault(); $('#composer').requestSubmit(); }
+  });
+  $('#send').addEventListener('pointerdown', (e) => e.preventDefault()); // klavyeyi kapatma
+
+  $('#composer').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || S.cur == null) return;
+    const { edit, reply } = S.compose;
+    if (edit) {
+      if (text === edit.body) return clearCompose();
+      if (await emit('message:edit', { id: edit.id, text })) clearCompose();
+      return;
+    }
+    const ok = await emit('message', { convId: S.cur, text, replyTo: reply ? reply.id : null });
+    if (!ok) return;
+    input.value = '';
+    S.drafts.delete(S.cur);
+    clearCompose();
+    autosize();
+    input.focus();
+  });
+
+  // ----- Fotoğraf / dosya gönderme -----
+  $('#btnAttach').onclick = () => {
+    openSheet('', [
+      menuItem('🖼️', 'Fotoğraf', () => { closeSheet(); $('#pickPhoto').click(); }),
+      menuItem('📄', 'Dosya', () => { closeSheet(); $('#pickFile').click(); }),
+    ]);
+  };
+  async function prepareImage(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+    let bmp = null;
+    try { bmp = await createImageBitmap(file); } catch (_) { return file; }
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale)), hh = Math.max(1, Math.round(bmp.height * scale));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = hh;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, hh);
+    ctx.drawImage(bmp, 0, 0, w, hh);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  }
+  async function sendFile(file) {
+    if (!file || S.cur == null) return;
+    const convId = S.cur;
+    toast('Gönderiliyor…', 0);
+    try {
+      const body = await prepareImage(file);
+      if (body.size > MAX_FILE) { toast('Dosya en fazla 3 MB olabilir.'); return; }
+      const reply = S.compose.reply;
+      const res = await fetch('/api/upload?conv=' + convId + (reply ? '&reply=' + reply.id : ''), {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + S.token, 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.error || 'Gönderilemedi.'); return; }
+      hideToast();
+      if (reply) clearCompose();
+    } catch (_) {
+      toast('Gönderilemedi. Bağlantını kontrol et.');
+    }
+  }
+  for (const id of ['#pickPhoto', '#pickFile']) {
+    $(id).addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (f) sendFile(f);
+    });
+  }
+
+  // ----- Yazı stili paleti (¢) -----
+  $('#btnStyle').onclick = () => openStyleSheet();
+  function openStyleSheet() {
+    const pre = parsePrefix(input.value);
+    const st = { digits: new Set(pre ? pre.st.digits : []), flags: new Set(pre ? pre.st.flags : []), rgb: pre ? pre.st.rgb : false };
+    const rest = pre ? pre.rest : input.value;
+    const preview = h('div', { class: 'style-preview' });
+    const codeLabel = h('code', { class: 'code-label' });
+    const swBtns = [], flagBtns = [];
+    let rgbBtn;
+    function refresh() {
+      const code = buildCode(st);
+      const sample = rest.trim() ? rest.trim().slice(0, 120) : 'Merhaba! Bu bir deneme yazısı.';
+      const { frag, bubbleStyled } = renderStyled(code ? '¢' + code + ' ' + sample : sample);
+      preview.replaceChildren(h('div', { class: 'bubble' + (bubbleStyled ? ' styled' : '') }, h('span', { class: 'text' }, frag)));
+      const key = colorKey(st);
+      codeLabel.textContent = code ? '¢' + code + (key && COLORS[key] && !st.rgb ? '  ·  ' + COLORS[key][0] : '') : 'Stil seçilmedi';
+      swBtns.forEach(([d, b]) => b.classList.toggle('on', st.digits.has(d)));
+      flagBtns.forEach(([f, b]) => b.classList.toggle('on', st.flags.has(f)));
+      rgbBtn.classList.toggle('on', st.rgb);
+    }
+    const sw = (d, label) => {
+      const b = h('button', { type: 'button', class: 'sw', style: 'background:' + COLORS[d][1], onclick: () => { st.digits.has(d) ? st.digits.delete(d) : st.digits.add(d); refresh(); } }, h('span', null, d), h('small', { text: label }));
+      swBtns.push([d, b]);
+      return b;
+    };
+    const flag = (f, label) => {
+      const b = h('button', { type: 'button', class: 'flag', text: label, onclick: () => { st.flags.has(f) ? st.flags.delete(f) : st.flags.add(f); refresh(); } });
+      flagBtns.push([f, b]);
+      return b;
+    };
+    rgbBtn = h('button', { type: 'button', class: 'flag', text: '🌈 Rengarenk', onclick: () => { st.rgb = !st.rgb; refresh(); } });
+    openSheet('Yazı stili', [
+      preview, codeLabel,
+      h('div', { class: 'swatches' }, sw('1', 'Mavi'), sw('2', 'Sarı'), sw('3', 'Kırmızı')),
+      h('div', { class: 'hint', text: 'Birden fazla renk seçersen karışır: 1+2 yeşil, 1+3 mor, 2+3 turuncu, 1+2+3 kahverengi.' }),
+      h('div', { class: 'flags' }, flag('b', 'Kalın'), flag('i', 'Yatık'), flag('u', 'Altı çizili'), flag('s', 'Üstü çizili'), flag('m', 'Daktilo'), flag('x', 'Büyük'), flag('k', 'Küçük'), flag('g', '✨ Parlama'), flag('t', 'Titreşim'), rgbBtn),
+      h('button', { type: 'button', class: 'btn-wide', text: 'Uygula', onclick: () => {
+        const code = buildCode(st);
+        input.value = code ? '¢' + code + ' ' + rest.replace(/^\s+/, '') : rest;
+        autosize();
+        closeSheet();
+        input.focus();
+      } }),
+      h('div', { class: 'hint', text: 'Elle yazmak için: ¢12b Merhaba  veya sadece bir kelime için  ¢3{kırmızı} kelime' }),
+    ]);
+    refresh();
+  }
+
+  // ----- Okundu bilgisi gönderme -----
+  let readTimer = null;
+  function scheduleRead() {
+    clearTimeout(readTimer);
+    readTimer = setTimeout(doRead, 250);
+  }
+  function doRead() {
+    if (!chatVisible() || !S.socket || !S.socket.connected) return;
+    const store = S.msgs.get(S.cur);
+    if (!store || !store.loaded || !store.list.length) return;
+    const lastId = store.list[store.list.length - 1].id;
+    const c = curConv();
+    if (c) {
+      const meMember = c.members.find((x) => x.id === S.me.id);
+      if (meMember && meMember.lastReadId < lastId) meMember.lastReadId = lastId;
+      if (c.unread) { c.unread = 0; renderConvList(); }
+    }
+    if ((S.sentRead.get(S.cur) || 0) >= lastId) return;
+    S.sentRead.set(S.cur, lastId);
+    S.socket.emit('read', { convId: S.cur, upTo: lastId });
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleRead(); });
+
+  // ---------- Kişiler, etiketler, yeni sohbet ----------
+  const canEditTag = (u) => u.id === S.me.id || !!S.me.isAdmin;
+  function avatarOf(name, size) {
+    return h('div', { class: 'avatar', style: `background:${colorFor(name)}${size ? ';width:' + size + 'px;height:' + size + 'px' : ''}`, text: initial(name) });
+  }
+  function personRow(u, { onPick, withEdit, extra } = {}) {
+    const holder = h('div', { class: 'person' + (onPick ? ' click' : '') });
+    const show = () => {
+      const fresh = S.users.get(u.id) || u;
+      fill(holder,
+        avatarOf(fresh.username, 40),
+        h('div', { class: 'pmain', onclick: onPick ? () => onPick(fresh) : null },
+          h('div', { class: 'pname' }, nameNode(fresh.id, fresh.username), fresh.id === S.me.id ? h('span', { class: 'tag', text: '· sen' }) : null),
+          extra ? h('div', { class: 'pnote', text: extra(fresh) }) : null),
+        withEdit && canEditTag(fresh) ? h('button', { type: 'button', class: 'pedit', 'aria-label': 'Etiketi düzenle', text: '✏️ Etiket', onclick: edit }) : null);
+    };
+    function edit() {
+      const fresh = S.users.get(u.id) || u;
+      const field = h('input', { type: 'text', maxlength: '24', value: fresh.tag || '', placeholder: 'örn. arkadaşım', 'aria-label': 'Etiket' });
+      const save = async () => {
+        try {
+          const { tag } = await api(`/api/users/${u.id}/tag`, { method: 'PATCH', body: { tag: field.value } });
+          const cur = S.users.get(u.id);
+          if (cur) cur.tag = tag;
+          afterUsersChanged();
+          show();
+        } catch (err) { failed(err); }
+      };
+      field.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+      holder.replaceChildren(
+        avatarOf(fresh.username, 40),
+        h('div', { class: 'pmain' }, h('div', { class: 'pname', text: fresh.username }), h('div', { class: 'inline-edit' }, field,
+          h('button', { type: 'button', text: 'Kaydet', onclick: save }),
+          h('button', { type: 'button', class: 'ghost', text: 'Vazgeç', onclick: show }))));
+      field.focus();
+    }
+    show();
+    return holder;
+  }
+  function allUsers() {
+    return [...S.users.values()].sort((a, b) => (a.id === S.me.id ? -1 : b.id === S.me.id ? 1 : a.username.localeCompare(b.username, 'tr')));
+  }
+  function openPeopleSheet() {
+    openSheet('Kişiler ve etiketler', [
+      h('div', { class: 'hint', text: 'Etiket, ismin yanında parantez içinde görünür. Kendi etiketini değiştirebilirsin' + (S.me.isAdmin ? '; başkan olarak herkesinkini değiştirebilirsin.' : '.') }),
+      allUsers().map((u) => personRow(u, { withEdit: true, onPick: u.id === S.me.id ? null : (x) => { closeSheet(); startDm(x.id); } })),
+    ]);
+  }
+  async function startDm(userId) {
+    try {
+      const { conversation } = await api('/api/conversations', { method: 'POST', body: { type: 'dm', userId } });
+      upsertConv(conversation);
+      renderConvList();
+      openChat(conversation.id);
+    } catch (err) { failed(err); }
+  }
+  function openNewSheet() {
+    openSheet('Yeni', [
+      menuItem('💬', 'Yeni sohbet', () => openPickUser()),
+      menuItem('👥', 'Yeni grup', () => openNewGroup()),
+    ]);
+  }
+  function openPickUser() {
+    const others = allUsers().filter((u) => u.id !== S.me.id);
+    setSheet('Kiminle yazışacaksın?', others.length
+      ? others.map((u) => personRow(u, { onPick: (x) => { closeSheet(); startDm(x.id); } }))
+      : h('div', { class: 'hint', text: 'Henüz başka kimse kayıt olmamış.' }));
+  }
+  function openNewGroup() {
+    const name = h('input', { type: 'text', maxlength: '40', placeholder: 'Grup adı', 'aria-label': 'Grup adı' });
+    const picks = [];
+    const others = allUsers().filter((u) => u.id !== S.me.id);
+    const create = h('button', { type: 'button', class: 'btn-wide', text: 'Oluştur' });
+    create.onclick = async () => {
+      const ids = picks.filter(([, cb]) => cb.checked).map(([id]) => id);
+      if (!name.value.trim()) return toast('Grup adı yaz.');
+      if (!ids.length) return toast('En az bir kişi seç.');
+      create.disabled = true;
+      try {
+        const { conversation } = await api('/api/conversations', { method: 'POST', body: { type: 'group', name: name.value, memberIds: ids } });
+        upsertConv(conversation);
+        closeSheet();
+        renderConvList();
+        openChat(conversation.id);
+      } catch (err) { create.disabled = false; failed(err); }
+    };
+    setSheet('Yeni grup', [
+      h('div', { class: 'form-row' }, name),
+      others.length ? others.map((u) => {
+        const cb = h('input', { type: 'checkbox', 'aria-label': u.username });
+        picks.push([u.id, cb]);
+        return h('label', { class: 'pick' }, cb, avatarOf(u.username, 36), nameNode(u.id, u.username));
+      }) : h('div', { class: 'hint', text: 'Henüz başka kimse kayıt olmamış.' }),
+      create,
+    ]);
+  }
+  function openGroupInfo() {
+    const c = curConv();
+    if (!c) return;
+    if (c.type === 'dm') {
+      const o = otherMember(c);
+      return openSheet('Kişi', o ? personRow(S.users.get(o.id) || o, { withEdit: true }) : null);
+    }
+    const body = [];
+    const canRename = !c.isDefault && (c.createdBy === S.me.id || S.me.isAdmin);
+    const titleRow = h('div', { class: 'form-row' });
+    const showTitle = () => {
+      titleRow.replaceChildren(h('div', { class: 'person' }, h('div', { class: 'pmain' }, h('div', { class: 'pname', text: c.name }), h('div', { class: 'pnote', text: c.members.length + ' üye' })),
+        canRename ? h('button', { type: 'button', class: 'pedit', text: '✏️ Ad', onclick: editTitle }) : null));
+    };
+    const editTitle = () => {
+      const f = h('input', { type: 'text', maxlength: '40', value: c.name, 'aria-label': 'Grup adı' });
+      const save = async () => {
+        try { await api(`/api/conversations/${c.id}`, { method: 'PATCH', body: { name: f.value } }); closeSheet(); } catch (err) { failed(err); }
+      };
+      f.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+      titleRow.replaceChildren(h('div', { class: 'inline-edit' }, f, h('button', { type: 'button', text: 'Kaydet', onclick: save }), h('button', { type: 'button', class: 'ghost', text: 'Vazgeç', onclick: showTitle })));
+      f.focus();
+    };
+    showTitle();
+    body.push(titleRow);
+    body.push(c.members.map((m) => personRow(S.users.get(m.id) || m, { withEdit: true, extra: (u) => (isOnline(u.username) ? 'çevrimiçi' : '') })));
+    if (!c.isDefault) {
+      body.push(h('button', { type: 'button', class: 'btn-wide ghost', text: '➕ Kişi ekle', onclick: () => openAddMembers(c) }));
+      body.push(h('button', { type: 'button', class: 'btn-wide danger', text: 'Gruptan ayrıl', onclick: async () => {
+        if (!confirm('Bu gruptan ayrılmak istiyor musun?')) return;
+        try { await api(`/api/conversations/${c.id}/members/me`, { method: 'DELETE' }); closeSheet(); } catch (err) { failed(err); }
+      } }));
+    }
+    openSheet('Grup bilgisi', body);
+  }
+  function openAddMembers(c) {
+    const have = new Set(c.members.map((m) => m.id));
+    const cands = allUsers().filter((u) => !have.has(u.id));
+    const picks = [];
+    const add = h('button', { type: 'button', class: 'btn-wide', text: 'Ekle' });
+    add.onclick = async () => {
+      const ids = picks.filter(([, cb]) => cb.checked).map(([id]) => id);
+      if (!ids.length) return toast('Eklenecek kişi seç.');
+      add.disabled = true;
+      try { await api(`/api/conversations/${c.id}/members`, { method: 'POST', body: { userIds: ids } }); closeSheet(); } catch (err) { add.disabled = false; failed(err); }
+    };
+    setSheet('Kişi ekle', cands.length ? [
+      cands.map((u) => { const cb = h('input', { type: 'checkbox', 'aria-label': u.username }); picks.push([u.id, cb]); return h('label', { class: 'pick' }, cb, avatarOf(u.username, 36), nameNode(u.id, u.username)); }),
+      add,
+    ] : h('div', { class: 'hint', text: 'Eklenecek başka kimse yok.' }));
+  }
+  $('#chatTitle').onclick = () => openGroupInfo();
+  $('#btnNew').onclick = () => openNewSheet();
+  $('#btnMenu').onclick = () => {
+    const items = [menuItem('👤', 'Kişiler ve etiketler', () => openPeopleSheet())];
+    if ('Notification' in window && Notification.permission === 'default') {
+      items.push(menuItem('🔔', 'Bildirimleri aç', async () => { closeSheet(); await Notification.requestPermission(); }));
+    }
+    items.push(menuItem('🚪', 'Çıkış yap', () => { closeSheet(); logout(); }, true));
+    openSheet('', items);
+  };
+  $('#btnBack').onclick = () => {
+    if (history.state && history.state.chat != null && !history.state.lb) history.back(); else leaveChatView();
+  };
+  window.addEventListener('popstate', () => {
+    if (lightbox) { closeLightbox(true); return; }
+    if (sheetEl) {
+      // Geri tuşu açık paneli kapatsın, sohbetten çıkarmasın.
+      closeSheet();
+      if (S.cur != null && !(history.state && history.state.chat != null)) history.pushState({ chat: S.cur }, '');
+      return;
+    }
+    if (S.cur != null && !(history.state && history.state.chat != null)) leaveChatView();
+  });
+
+  function afterUsersChanged() {
+    renderConvList();
+    if (S.cur != null) {
+      updateChatHeader();
+      const store = S.msgs.get(S.cur);
+      if (store && store.loaded) { const top = list.scrollTop, stick = nearBottom(); renderAll(); list.scrollTop = stick ? list.scrollHeight : top; }
+      updatePinBar();
+    }
+  }
+
+  // ---------- Bildirimler ----------
+  async function notify(m, c) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const title = c.type === 'dm' ? m.username : m.username + ' · ' + c.name;
+    const opts = { body: previewOf(m), tag: 'bizimki-' + c.id, icon: '/icon-192.png' };
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, opts);
+    } catch (_) {
+      try { new Notification(title, opts); } catch (__) {}
+    }
+  }
+
+  // ---------- Sesli oda (WebRTC) ----------
+  let iceServers = null, localStream = null, inVoice = false, joining = false, muted = false, wakeLock = null;
+  let voiceNames = [];
+  const peers = new Map();
+
+  async function getIce() {
+    if (iceServers) return iceServers;
+    try { iceServers = (await api('/api/ice')).iceServers; } catch (_) { iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]; }
+    return iceServers;
+  }
+  function updateVoiceUI() {
+    const toggle = $('#voiceToggle'), mute = $('#voiceMute');
+    $('#voice').classList.toggle('live', inVoice);
+    $('#voiceInfo').textContent = inVoice ? 'Sesli odadasın: ' + voiceNames.join(', ') : voiceNames.length ? 'Sesli odada: ' + voiceNames.join(', ') : 'Sesli oda boş';
+    toggle.textContent = inVoice ? 'Ayrıl' : voiceNames.length ? 'Katıl' : 'Başlat';
+    toggle.className = inVoice ? 'leave' : '';
+    toggle.disabled = joining;
+    mute.hidden = !inVoice;
+    mute.textContent = muted ? 'Mikrofonu aç' : 'Sustur';
+  }
+  function closePeer(id) {
+    const p = peers.get(id);
+    if (!p) return;
+    peers.delete(id);
+    try { p.pc.close(); } catch (_) {}
+    if (p.audio) { p.audio.srcObject = null; p.audio.remove(); }
+  }
+  function createPeer(id, username) {
+    const pc = new RTCPeerConnection({ iceServers });
+    const entry = { pc, audio: null, username, pending: [] };
+    peers.set(id, entry);
+    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+    pc.onicecandidate = (e) => { if (e.candidate && S.socket) S.socket.emit('voice:signal', { to: id, data: { candidate: e.candidate } }); };
+    pc.ontrack = (e) => {
+      if (!entry.audio) {
+        const a = document.createElement('audio');
+        a.autoplay = true;
+        a.setAttribute('playsinline', '');
+        $('#voiceAudio').appendChild(a);
+        entry.audio = a;
+      }
+      entry.audio.srcObject = e.streams[0];
+      entry.audio.play().catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' && peers.get(id) === entry) toast(username + ' ile ses bağlantısı kurulamadı.');
+    };
+    return entry;
+  }
+  async function flushPending(entry) {
+    for (const c of entry.pending.splice(0)) { try { await entry.pc.addIceCandidate(c); } catch (_) {} }
+  }
+  function stopLocal() {
+    if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
+    if (wakeLock) { try { wakeLock.release(); } catch (_) {} wakeLock = null; }
+  }
+  function cleanupVoice(tellServer) {
+    if (tellServer && S.socket && inVoice) S.socket.emit('voice:leave');
+    for (const id of [...peers.keys()]) closePeer(id);
+    stopLocal();
+    inVoice = false; joining = false; muted = false;
+    updateVoiceUI();
+  }
+  async function joinVoice() {
+    if (inVoice || joining) return;
+    if (!S.socket || !S.socket.connected) { toast('Bağlantı yok. Bağlanınca tekrar dene.'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) { toast('Bu tarayıcı sesli görüşmeyi desteklemiyor.'); return; }
+    joining = true;
+    updateVoiceUI();
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+    } catch (_) {
+      joining = false;
+      updateVoiceUI();
+      toast('Mikrofon izni verilmedi. Tarayıcı ayarlarından izin ver.');
+      return;
+    }
+    await getIce();
+    S.socket.emit('voice:join', {}, async (res) => {
+      if (!res || res.error) {
+        stopLocal(); joining = false; updateVoiceUI();
+        toast((res && res.error) || 'Sesli odaya girilemedi.');
+        return;
+      }
+      inVoice = true; joining = false; muted = false;
+      updateVoiceUI();
+      try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+      for (const p of res.peers) {
+        try {
+          const entry = createPeer(p.id, p.username);
+          const offer = await entry.pc.createOffer();
+          await entry.pc.setLocalDescription(offer);
+          S.socket.emit('voice:signal', { to: p.id, data: { sdp: entry.pc.localDescription } });
+        } catch (_) {}
+      }
+    });
+  }
+  $('#voiceToggle').onclick = () => (inVoice ? cleanupVoice(true) : joinVoice());
+  $('#voiceMute').onclick = () => {
+    muted = !muted;
+    if (localStream) localStream.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    updateVoiceUI();
+  };
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden && inVoice && navigator.wakeLock && !wakeLock) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {} }
+  });
+  async function onVoiceSignal({ from, username, data }) {
+    if (!inVoice || !data) return;
+    try {
+      let entry = peers.get(from);
+      if (data.sdp) {
+        if (data.sdp.type === 'offer') {
+          if (entry) closePeer(from);
+          entry = createPeer(from, username);
+          await entry.pc.setRemoteDescription(data.sdp);
+          await flushPending(entry);
+          const answer = await entry.pc.createAnswer();
+          await entry.pc.setLocalDescription(answer);
+          S.socket.emit('voice:signal', { to: from, data: { sdp: entry.pc.localDescription } });
+        } else if (entry) {
+          await entry.pc.setRemoteDescription(data.sdp);
+          await flushPending(entry);
+        }
+      } else if (data.candidate && entry) {
+        if (entry.pc.remoteDescription) { try { await entry.pc.addIceCandidate(data.candidate); } catch (_) {} }
+        else entry.pending.push(data.candidate);
+      }
+    } catch (_) {}
+  }
+
+  // ---------- Socket ----------
+  function onNewMessage(m) {
+    const c = S.convMap.get(m.convId);
+    if (!c) { loadConvs().catch(() => {}); return; }
+    c.lastMessage = m;
+    const mine = m.userId === S.me.id;
+    const store = S.msgs.get(m.convId);
+    const isCur = S.cur === m.convId;
+    if (store && store.loaded && !store.map.has(m.id)) {
+      const prev = store.list[store.list.length - 1] || null;
+      const stick = nearBottom() || mine;
+      store.list.push(m);
+      store.map.set(m.id, m);
+      if (isCur) {
+        appendRow(m, prev);
+        if (stick) scrollToBottom(); else $('#newPill').hidden = false;
+      }
+    }
+    const typers = S.typing.get(m.convId);
+    if (typers && typers.has(m.username)) { clearTimeout(typers.get(m.username)); typers.delete(m.username); if (isCur) renderTyping(); }
+    if (!mine && m.kind !== 'system') {
+      if (chatVisible() && isCur) scheduleRead();
+      else {
+        c.unread = (c.unread || 0) + 1;
+        if (document.hidden || !isCur) notify(m, c);
+      }
+    }
+    renderConvList();
+  }
+  function applyUpdate(m) {
+    const store = S.msgs.get(m.convId);
+    if (store && store.map.has(m.id)) {
+      const i = store.list.findIndex((x) => x.id === m.id);
+      if (i >= 0) store.list[i] = m;
+      store.map.set(m.id, m);
+      if (S.cur === m.convId) replaceRow(m);
+    }
+    const pins = S.pins.get(m.convId);
+    if (pins) {
+      const i = pins.findIndex((x) => x.id === m.id);
+      if (m.pinnedAt && !m.deleted) { if (i >= 0) pins[i] = m; else pins.push(m); pins.sort((a, b) => b.pinnedAt - a.pinnedAt); }
+      else if (i >= 0) pins.splice(i, 1);
+      if (S.cur === m.convId) updatePinBar();
+    }
+    const c = S.convMap.get(m.convId);
+    if (c && c.lastMessage && c.lastMessage.id === m.id) { c.lastMessage = m; renderConvList(); }
+  }
+
+  function connectSocket() {
+    if (S.socket) S.socket.disconnect();
+    const socket = io({ auth: { token: S.token } });
+    S.socket = socket;
+
+    socket.on('connect', async () => {
+      $('#banner').hidden = true;
+      if (S.hasConnectedOnce) {
+        try {
+          const keep = S.cur;
+          for (const id of [...S.msgs.keys()]) if (id !== keep) S.msgs.delete(id);
+          S.pins.delete(keep);
+          S.sentRead.clear();
+          await loadConvs();
+          if (keep != null && S.convMap.has(keep)) {
+            const { messages, hasMore } = await api(`/api/conversations/${keep}/messages`);
+            setStore(keep, messages, hasMore);
+            if (S.cur === keep) { const stick = nearBottom(); renderAll(); if (stick) scrollToBottom(); loadPins(keep); scheduleRead(); }
+          }
+        } catch (_) {}
+      }
+      S.hasConnectedOnce = true;
+    });
+    socket.on('disconnect', () => {
+      $('#banner').hidden = false;
+      if (inVoice || joining) { cleanupVoice(false); toast('Bağlantı koptu, sesli odadan çıkarıldın.'); }
+    });
+    socket.on('connect_error', (err) => {
+      if (err && err.message === 'auth') { toast('Oturumun süresi doldu. Tekrar giriş yap.'); logout(); }
+      else $('#banner').hidden = false;
+    });
+
+    socket.on('message', onNewMessage);
+    socket.on('message:update', applyUpdate);
+    socket.on('read:update', ({ convId, userId, lastReadId }) => {
+      const c = S.convMap.get(convId);
+      const mem = c && c.members.find((x) => x.id === userId);
+      if (mem && mem.lastReadId < lastReadId) { mem.lastReadId = lastReadId; if (S.cur === convId) updateTicks(); }
+    });
+    socket.on('conversations:changed', () => { loadConvs().catch(() => {}); });
+    socket.on('users:changed', (u) => {
+      const cur = S.users.get(u.id);
+      if (cur) cur.tag = u.tag; else S.users.set(u.id, { id: u.id, username: u.username, tag: u.tag });
+      afterUsersChanged();
+    });
+    socket.on('presence', (names) => {
+      S.online = new Set(names);
+      updatePresenceLine();
+      renderConvList();
+      if (S.cur != null) updateChatHeader();
+    });
+    socket.on('typing', ({ convId, username }) => {
+      if (!S.typing.has(convId)) S.typing.set(convId, new Map());
+      const map = S.typing.get(convId);
+      clearTimeout(map.get(username));
+      map.set(username, setTimeout(() => { map.delete(username); if (S.cur === convId) renderTyping(); renderConvList(); }, 3000));
+      if (S.cur === convId) renderTyping();
+      renderConvList();
+    });
+    socket.on('voice:members', (names) => { voiceNames = names; updateVoiceUI(); });
+    socket.on('voice:signal', onVoiceSignal);
+    socket.on('voice:peer-left', (id) => closePeer(id));
+  }
+
+  // ---------- Başlangıç ----------
+  async function startApp() {
+    $('#auth').hidden = true;
+    $('#app').hidden = false;
+    $('#home').hidden = false;
+    $('#chat').hidden = true;
+    S.cur = null;
+    history.replaceState({ home: true }, '');
+    placeVoice();
+    updateVoiceUI();
+    try {
+      const { user } = await api('/api/me');
+      S.me = user;
+      lsSet('me', JSON.stringify(user));
+      await Promise.all([loadUsers(), loadConvs()]);
+    } catch (err) {
+      if (err.status === 401) { logout(); return; }
+      toast('Sohbetler yüklenemedi. Sayfayı yenile.');
+    }
+    connectSocket();
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (S.token && S.me) startApp(); else showAuth();
+})();
+</script>
+</body>
+</html>
